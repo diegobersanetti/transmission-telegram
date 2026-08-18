@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -242,12 +243,13 @@ func init() {
 				case line := <-ft.Lines():
 					if strings.Contains(line, substring) {
 						// if we don't have a chatID continue
-						if chatID == 0 {
+						cid := atomic.LoadInt64(&chatID)
+						if cid == 0 {
 							continue
 						}
 
 						msg := fmt.Sprintf("Completed: %s", line[start:len(line)-end])
-						send(msg, chatID, false)
+						send(msg, cid, false)
 					}
 				case err := <-ft.Errors():
 					logger.Printf("[ERROR] tailing transmission log: %s", err)
@@ -260,14 +262,14 @@ func init() {
 
 	// if the `-username` flag isn't set, look into the environment variable 'TR_AUTH'
 	if Username == "" {
-		if values := strings.Split(os.Getenv("TR_AUTH"), ":"); len(values) > 1 {
+		if values := strings.SplitN(os.Getenv("TR_AUTH"), ":", 2); len(values) > 1 {
 			Username, Password = values[0], values[1]
 		}
 	}
 
 	// log the flags
-	logger.Printf("[INFO] Token=%s\n\t\tMasters=%s\n\t\tURL=%s\n\t\tUSER=%s\n\t\tPASS=%s",
-		BotToken, Masters, RPCURL, Username, Password)
+	logger.Printf("[INFO] Token=****\n\t\tMasters=%s\n\t\tURL=%s\n\t\tUSER=%s\n\t\tPASS=****",
+		Masters, RPCURL, Username)
 }
 
 // init transmission
@@ -316,8 +318,8 @@ func main() {
 		}
 
 		// update chatID for complete notification
-		if TransLogFile != "" && chatID != update.Message.Chat.ID {
-			chatID = update.Message.Chat.ID
+		if TransLogFile != "" && atomic.LoadInt64(&chatID) != update.Message.Chat.ID {
+			atomic.StoreInt64(&chatID, update.Message.Chat.ID)
 		}
 
 		// tokenize the update
@@ -443,7 +445,7 @@ func list(ud tgbotapi.Update, tokens []string) {
 	// if it gets a query, it will list torrents that has trackers that match the query
 	if len(tokens) != 0 {
 		// (?i) for case insensitivity
-		regx, err := regexp.Compile("(?i)" + tokens[0])
+		regx, err := regexp.Compile("(?i)" + regexp.QuoteMeta(tokens[0]))
 		if err != nil {
 			send("*list:* "+err.Error(), ud.Message.Chat.ID, false)
 			return
@@ -1053,7 +1055,7 @@ func search(ud tgbotapi.Update, tokens []string) {
 
 	query := strings.Join(tokens, " ")
 	// "(?i)" for case insensitivity
-	regx, err := regexp.Compile("(?i)" + query)
+	regx, err := regexp.Compile("(?i)" + regexp.QuoteMeta(query))
 	if err != nil {
 		send("*search:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -1164,10 +1166,10 @@ func info(ud tgbotapi.Update, tokens []string) {
 		}
 
 		// this go-routine will make the info live for 'duration * interval'
-		go func(torrentID, msgID int) {
+		go func(torrentID, msgID int, trackers string) {
 			for i := 0; i < duration; i++ {
 				time.Sleep(time.Second * interval)
-				torrent, err = Client.GetTorrent(torrentID)
+				torrent, err := Client.GetTorrent(torrentID)
 				if err != nil {
 					continue // skip this iteration if there's an error retrieving the torrent's info
 				}
@@ -1188,6 +1190,11 @@ func info(ud tgbotapi.Update, tokens []string) {
 			// sleep one more time before the dashes
 			time.Sleep(time.Second * interval)
 
+			// fetch one final time for the dashes display
+			torrent, err := Client.GetTorrent(torrentID)
+			if err != nil {
+				return
+			}
 			// at the end write dashes to indicate that we are done being live.
 			torrentName := mdReplacer.Replace(torrent.Name)
 			info := fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *- B*  ↑ *- B* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *-*\nTrackers: `%s`",
@@ -1198,7 +1205,7 @@ func info(ud tgbotapi.Update, tokens []string) {
 			editConf := tgbotapi.NewEditMessageText(ud.Message.Chat.ID, msgID, info)
 			editConf.ParseMode = tgbotapi.ModeMarkdown
 			Bot.Send(editConf)
-		}(torrentID, msgID)
+		}(torrentID, msgID, trackers)
 	}
 }
 
@@ -1235,7 +1242,7 @@ func stop(ud tgbotapi.Update, tokens []string) {
 		torrent, err := Client.GetTorrent(num)
 		if err != nil {
 			send(fmt.Sprintf("[fail] *stop:* No torrent with an ID of %d", num), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 		send(fmt.Sprintf("[%s] *stop:* %s", status, torrent.Name), ud.Message.Chat.ID, false)
 	}
@@ -1275,7 +1282,7 @@ func start(ud tgbotapi.Update, tokens []string) {
 		torrent, err := Client.GetTorrent(num)
 		if err != nil {
 			send(fmt.Sprintf("[fail] *start:* No torrent with an ID of %d", num), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 		send(fmt.Sprintf("[%s] *start:* %s", status, torrent.Name), ud.Message.Chat.ID, false)
 	}
@@ -1315,7 +1322,7 @@ func check(ud tgbotapi.Update, tokens []string) {
 		torrent, err := Client.GetTorrent(num)
 		if err != nil {
 			send(fmt.Sprintf("[fail] *check:* No torrent with an ID of %d", num), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 		send(fmt.Sprintf("[%s] *check:* %s", status, torrent.Name), ud.Message.Chat.ID, false)
 	}
@@ -1494,13 +1501,13 @@ func del(ud tgbotapi.Update, tokens []string) {
 		num, err := strconv.Atoi(id)
 		if err != nil {
 			send(fmt.Sprintf("*del:* %s is not an ID", id), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 
 		name, err := Client.DeleteTorrent(num, false)
 		if err != nil {
 			send("*del:* "+err.Error(), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 
 		send("*Deleted:* "+name, ud.Message.Chat.ID, false)
@@ -1519,13 +1526,13 @@ func deldata(ud tgbotapi.Update, tokens []string) {
 		num, err := strconv.Atoi(id)
 		if err != nil {
 			send(fmt.Sprintf("*deldata:* %s is not an ID", id), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 
 		name, err := Client.DeleteTorrent(num, true)
 		if err != nil {
 			send("*deldata:* "+err.Error(), ud.Message.Chat.ID, false)
-			return
+			continue
 		}
 
 		send("Deleted with data: "+name, ud.Message.Chat.ID, false)
@@ -1543,32 +1550,42 @@ func send(text string, chatID int64, markdown bool) int {
 	action := tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)
 	Bot.Send(action)
 
-	// check the rune count, telegram is limited to 4096 chars per message;
-	// so if our message is > 4096, split it in chunks the send them.
-	msgRuneCount := utf8.RuneCountInString(text)
-LenCheck:
-	stop := 4095
-	if msgRuneCount > 4096 {
-		for text[stop] != 10 { // '\n'
-			stop--
+	// Telegram is limited to 4096 chars per message.
+	// Split long messages on newline boundaries.
+	const maxChars = 4096
+
+	for utf8.RuneCountInString(text) > maxChars {
+		// Convert rune limit to a byte offset.
+		byteLimit := 0
+		for i := 0; i < maxChars && byteLimit < len(text); i++ {
+			_, size := utf8.DecodeRuneInString(text[byteLimit:])
+			byteLimit += size
 		}
-		msg := tgbotapi.NewMessage(chatID, text[:stop])
+
+		// Search backward from byteLimit for a newline to split on.
+		splitAt := strings.LastIndex(text[:byteLimit], "\n")
+		if splitAt == -1 {
+			// No newline found; force split at the rune boundary.
+			splitAt = byteLimit
+		}
+
+		msg := tgbotapi.NewMessage(chatID, text[:splitAt])
 		msg.DisableWebPagePreview = true
 		if markdown {
 			msg.ParseMode = tgbotapi.ModeMarkdown
 		}
-
-		// send current chunk
 		if _, err := Bot.Send(msg); err != nil {
 			logger.Printf("[ERROR] Send: %s", err)
 		}
-		// move to the next chunk
-		text = text[stop:]
-		msgRuneCount = utf8.RuneCountInString(text)
-		goto LenCheck
+
+		// Move to the next chunk, skip the newline.
+		text = text[splitAt:]
+		if len(text) > 0 && text[0] == '\n' {
+			text = text[1:]
+		}
 	}
 
-	// if msgRuneCount < 4096, send it normally
+	// Send the remaining (or only) chunk.
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.DisableWebPagePreview = true
 	if markdown {
