@@ -1,7 +1,12 @@
 package notify
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestParseCompletionLog(t *testing.T) {
@@ -60,4 +65,56 @@ func TestParseCompletionLog(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStartTailer(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "transmission.log")
+
+	// Create initial log file with some prior data
+	if err := os.WriteFile(logFile, []byte("initial line\n"), 0644); err != nil {
+		t.Fatalf("failed to create log file: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var sentMessages []string
+	var mu sync.Mutex
+
+	send := func(text string, chatID int64, markdown bool) int {
+		mu.Lock()
+		defer mu.Unlock()
+		sentMessages = append(sentMessages, text)
+		return 1
+	}
+
+	getChatID := func() int64 {
+		return 123456
+	}
+
+	StartTailer(ctx, logFile, getChatID, send, nil)
+
+	// Wait a moment for tailer to seek to EOF
+	time.Sleep(50 * time.Millisecond)
+
+	// Append a completion log line
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("failed to open log for append: %v", err)
+	}
+	f.WriteString(`[2026-08-19 04:00:00] Fedora 40 Workstation State changed from "Incomplete" to "Complete" (torrent.c:1234)` + "\n")
+	f.Close()
+
+	// Wait for tailer to read and process line
+	time.Sleep(600 * time.Millisecond)
+
+	mu.Lock()
+	if len(sentMessages) != 1 {
+		t.Fatalf("expected 1 completion message, got %d", len(sentMessages))
+	}
+	if sentMessages[0] != "Completed: Fedora 40 Workstation" {
+		t.Errorf("expected 'Completed: Fedora 40 Workstation', got %q", sentMessages[0])
+	}
+	mu.Unlock()
 }

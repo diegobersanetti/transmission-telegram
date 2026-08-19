@@ -1,11 +1,15 @@
 package notify
 
 import (
+	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"strings"
-
-	"github.com/pyed/tailer"
+	"time"
 )
 
 type ChatIDProvider func() int64
@@ -39,28 +43,52 @@ func ParseCompletionLog(line string) (string, bool) {
 	return name, true
 }
 
-func StartTailer(logFile string, getChatID ChatIDProvider, send SendFunc, logger *slog.Logger) {
+// StartTailer monitors a Transmission log file for completion events using standard library file operations.
+func StartTailer(ctx context.Context, logFile string, getChatID ChatIDProvider, send SendFunc, logger *slog.Logger) {
 	go func() {
-		ft := tailer.RunFileTailer(logFile, false, nil)
+		file, err := os.Open(logFile)
+		if err != nil {
+			if logger != nil {
+				logger.Error("Failed to open transmission logfile", "path", logFile, "error", err)
+			}
+			return
+		}
+		defer file.Close()
 
+		// Seek to end of file so we only tail newly appended logs
+		if _, err := file.Seek(0, io.SeekEnd); err != nil {
+			if logger != nil {
+				logger.Error("Failed to seek transmission logfile", "error", err)
+			}
+			return
+		}
+
+		reader := bufio.NewReader(file)
 		for {
 			select {
-			case line := <-ft.Lines():
+			case <-ctx.Done():
+				return
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						time.Sleep(500 * time.Millisecond)
+						continue
+					}
+					if logger != nil {
+						logger.Error("Error reading transmission logfile", "error", err)
+					}
+					return
+				}
+
 				torrentName, ok := ParseCompletionLog(line)
 				if ok {
 					cid := getChatID()
-					if cid == 0 {
-						continue
+					if cid != 0 {
+						msg := fmt.Sprintf("Completed: %s", torrentName)
+						send(msg, cid, false)
 					}
-
-					msg := fmt.Sprintf("Completed: %s", torrentName)
-					send(msg, cid, false)
 				}
-			case err := <-ft.Errors():
-				if logger != nil {
-					logger.Error("Tailing transmission log failed", "error", err)
-				}
-				return
 			}
 		}
 	}()

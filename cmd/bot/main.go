@@ -59,7 +59,7 @@ func main() {
 
 	// Start completion notifications
 	if cfg.TransLogFile != "" {
-		notify.StartTailer(cfg.TransLogFile, b.ChatID, func(text string, chatID int64, markdown bool) int {
+		notify.StartTailer(ctx, cfg.TransLogFile, b.ChatID, func(text string, chatID int64, markdown bool) int {
 			return b.Send(ctx, text, chatID, markdown)
 		}, logger)
 	} else {
