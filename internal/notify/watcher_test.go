@@ -19,7 +19,7 @@ func TestStartWatcher(t *testing.T) {
 		{ID: 2, Name: "Torrent 2", PercentDone: 1.0, Status: transmission.StatusSeeding},
 	}
 
-	getTorrents := func() (transmission.Torrents, error) {
+	getTorrents := func(ctx context.Context) (transmission.Torrents, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		copyList := make(transmission.Torrents, len(torrentsList))

@@ -63,7 +63,9 @@ func main() {
 			return b.Send(ctx, text, chatID, markdown)
 		}, logger)
 	} else {
-		notify.StartWatcher(ctx, cfg.Interval, client.GetTorrents, b.ChatID, func(text string, chatID int64, markdown bool) int {
+		notify.StartWatcher(ctx, cfg.Interval, func(reqCtx context.Context) (transmission.Torrents, error) {
+			return client.GetTorrents(reqCtx)
+		}, b.ChatID, func(text string, chatID int64, markdown bool) int {
 			return b.Send(ctx, text, chatID, markdown)
 		}, logger)
 	}

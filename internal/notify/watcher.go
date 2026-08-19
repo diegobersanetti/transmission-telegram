@@ -10,7 +10,7 @@ import (
 	"github.com/pyed/transmission"
 )
 
-type TorrentsProvider func() (transmission.Torrents, error)
+type TorrentsProvider func(ctx context.Context) (transmission.Torrents, error)
 
 // StartWatcher monitors Transmission torrent completion via periodic RPC polling.
 // This enables completion notifications without requiring access to a local log file.
@@ -32,7 +32,7 @@ func StartWatcher(ctx context.Context, interval time.Duration, getTorrents Torre
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				torrents, err := getTorrents()
+				torrents, err := getTorrents(ctx)
 				if err != nil {
 					if logger != nil {
 						logger.Warn("Notification watcher failed to get torrents", "error", err)
