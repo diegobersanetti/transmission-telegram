@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -114,9 +115,9 @@ func (masters *MasterSlice) Set(master string) error {
 }
 
 func (masters MasterSlice) Contains(username string) bool {
-	username = strings.ToLower(username)
+	username = strings.ToLower(strings.TrimPrefix(username, "@"))
 	for _, master := range masters {
-		if master == username {
+		if strings.TrimPrefix(master, "@") == username {
 			return true
 		}
 	}
@@ -137,37 +138,52 @@ type Config struct {
 }
 
 func Parse() *Config {
-	cfg := &Config{
-		Interval: 5 * time.Second,
-		Duration: 10,
-	}
-
-	flag.StringVar(&cfg.BotToken, "token", "", "Telegram bot token, Can be passed via environment variable 'TT_BOTT'")
-	flag.Var(&cfg.Masters, "master", "Your telegram handler, So the bot will only respond to you. Can specify more than one")
-	flag.StringVar(&cfg.RPCURL, "url", "http://localhost:9091/transmission/rpc", "Transmission RPC URL")
-	flag.StringVar(&cfg.Username, "username", "", "Transmission username")
-	flag.StringVar(&cfg.Password, "password", "", "Transmission password")
-	flag.StringVar(&cfg.LogFile, "logfile", "", "Send logs to a file")
-	flag.StringVar(&cfg.TransLogFile, "transmission-logfile", "", "Open transmission logfile to monitor torrents completion")
-	flag.BoolVar(&cfg.NoLive, "no-live", false, "Don't edit and update info after sending")
-
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, "Usage: transmission-telegram <-token=TOKEN> <-master=@tuser> [-master=@yuser2] [-url=http://] [-username=user] [-password=pass]\n\n")
 		flag.PrintDefaults()
 	}
 
-	flag.Parse()
+	cfg, err := ParseFlags(flag.CommandLine, os.Args[1:], os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	return cfg
+}
+
+func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*Config, error) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+
+	cfg := &Config{
+		Interval: 5 * time.Second,
+		Duration: 10,
+	}
+
+	fs.StringVar(&cfg.BotToken, "token", "", "Telegram bot token, Can be passed via environment variable 'TT_BOTT'")
+	fs.Var(&cfg.Masters, "master", "Your telegram handler, So the bot will only respond to you. Can specify more than one")
+	fs.StringVar(&cfg.RPCURL, "url", "http://localhost:9091/transmission/rpc", "Transmission RPC URL")
+	fs.StringVar(&cfg.Username, "username", "", "Transmission username")
+	fs.StringVar(&cfg.Password, "password", "", "Transmission password")
+	fs.StringVar(&cfg.LogFile, "logfile", "", "Send logs to a file")
+	fs.StringVar(&cfg.TransLogFile, "transmission-logfile", "", "Open transmission logfile to monitor torrents completion")
+	fs.BoolVar(&cfg.NoLive, "no-live", false, "Don't edit and update info after sending")
+
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
 
 	if cfg.BotToken == "" {
-		if token := os.Getenv("TT_BOTT"); len(token) > 1 {
+		if token := getenv("TT_BOTT"); len(token) > 1 {
 			cfg.BotToken = token
 		}
 	}
 
 	if cfg.BotToken == "" || len(cfg.Masters) < 1 {
-		fmt.Fprintf(os.Stderr, "Error: Mandatory argument missing! (-token or -master)\n\n")
-		flag.Usage()
-		os.Exit(1)
+		return nil, errors.New("mandatory argument missing! (-token or -master)")
 	}
 
 	for i := range cfg.Masters {
@@ -175,10 +191,10 @@ func Parse() *Config {
 	}
 
 	if cfg.Username == "" {
-		if values := strings.SplitN(os.Getenv("TR_AUTH"), ":", 2); len(values) > 1 {
+		if values := strings.SplitN(getenv("TR_AUTH"), ":", 2); len(values) > 1 {
 			cfg.Username, cfg.Password = values[0], values[1]
 		}
 	}
 
-	return cfg
+	return cfg, nil
 }

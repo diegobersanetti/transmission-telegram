@@ -89,7 +89,7 @@ func (b *Bot) sort(ctx context.Context, ud *models.Update, args []string) {
 		}
 		b.Client.SetSort(transmission.SortRatio)
 	default:
-		b.Send(ctx, "unkown sorting method", ud.Message.Chat.ID, false)
+		b.Send(ctx, "unknown sorting method", ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -156,7 +156,7 @@ func (b *Bot) downloaddir(ctx context.Context, ud *models.Update, args []string)
 
 	b.Send(
 		ctx,
-		"*downloaddir:* downloaddir has been successfully changed to"+downloadDir,
+		"*downloaddir:* downloaddir has been successfully changed to "+downloadDir,
 		ud.Message.Chat.ID, false,
 	)
 }
