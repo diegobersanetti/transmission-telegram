@@ -1,61 +1,98 @@
 # transmission-telegram
 
-#### Manage your transmission through Telegram.
+#### Manage your Transmission BitTorrent client through Telegram.
 
 <img src="https://raw.github.com/pyed/transmission-telegram/master/demo.gif" width="400" />
 
-## CLI
+## Installation
 
-###  Install
+### Binary Releases
+Download the pre-compiled binary for your OS and architecture from the [Releases](https://github.com/pyed/transmission-telegram/releases) page and place `transmission-telegram` in your `$PATH`.
 
-Just [download](https://github.com/pyed/transmission-telegram/releases) the appropriate binary for your OS, place `transmission-telegram` in your `$PATH` and you are good to go.
+### From Source (Go 1.22+)
+```bash
+go install github.com/pyed/transmission-telegram/cmd/bot@latest
+```
 
-Or if you have `Go` installed: `go get -u github.com/pyed/transmission-telegram`
+---
 
-## Usage
+## Configuration
 
-[Wiki](https://github.com/pyed/transmission-telegram/wiki)
+You can configure `transmission-telegram` via command-line flags or environment variables:
 
+| Flag | Environment Variable | Description |
+|---|---|---|
+| `-token` | `TT_BOTT` | Telegram Bot Token (*Required*) |
+| `-master` | — | Telegram username allowed to control the bot (*Required*, repeatable for multiple users) |
+| `-url` | `TR_URL` | Transmission RPC URL (default: `http://localhost:9091/transmission/rpc`) |
+| `-username` | `TR_AUTH` (`user:pass`) | Transmission RPC Username |
+| `-password` | `TR_AUTH` (`user:pass`) | Transmission RPC Password |
+| `-logfile` | — | Path to log file (default: stdout) |
+| `-transmission-logfile` | — | Transmission log file to monitor for torrent completion notifications |
+| `-no-live` | — | Disable auto-refreshing message updates for torrent speeds/status |
 
-##  Docker Alternate Installation Route
+### Example CLI Usage
+```bash
+transmission-telegram \
+  -token="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" \
+  -master="@YourTelegramUsername" \
+  -url="http://localhost:9091/transmission/rpc" \
+  -username="admin" \
+  -password="password"
+```
+
+---
+
+## Docker
 
 ### Standalone
-
-```
+```bash
 docker run -d --name transmission-telegram \
-kevinhalpin/transmission-telegram:latest \
--token=<Your Bot Token> \
--master=<Your Username> \
--url=<Transmission RPC> \
--username=<Transmission If Needed> \ 
--password=<Transmissions If Needed>
+  --restart unless-stopped \
+  -e TT_BOTT="<Your Bot Token>" \
+  -e TR_AUTH="<username>:<password>" \
+  kevinhalpin/transmission-telegram:latest \
+  -master="<Your Username>" \
+  -url="http://transmission:9091/transmission/rpc"
 ```
 
-### docker-compose Example
+### Docker Compose
+```yaml
+version: '3.8'
 
-```
-version: '2.4'
 services:
   transmission:
+    image: linuxserver/transmission:latest
     container_name: transmission
     environment:
-      - PUID=${PUID_DOCKUSER}
-      - PGID=${PGID_APPZ}
-    image: linuxserver/transmission
-    network_mode: 'host'
-    hostname: 'transmission'
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
     volumes:
-      - ${CONFIG}/transmission:/config
-      - ${DATA}/transmission/downloads:/downloads
+      - /path/to/config:/config
+      - /path/to/downloads:/downloads
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    restart: unless-stopped
 
-telegram-transmission-bot:
-    container_name: telegram-transmission-bot
-    restart: on-failure
+  telegram-bot:
+    image: kevinhalpin/transmission-telegram:latest
+    container_name: transmission-telegram
     depends_on:
       - transmission
-      - plex
-      - emby
-    network_mode: 'host'
-    image: kevinhalpin/transmission-telegram:latest
-    command: '-token=${TELEGRAM_TRANSMISSION_BOT} -master=${TELEGRAM_USERNAME} -url=${TRANSMISSION_URL} -username=${TRANSMISSION_USERNAME} -password=${PASS}'
+    restart: unless-stopped
+    command: >
+      -token="YOUR_BOT_TOKEN"
+      -master="@YourTelegramUsername"
+      -url="http://transmission:9091/transmission/rpc"
+      -username="admin"
+      -password="password"
 ```
+
+---
+
+## Documentation & Commands
+
+See the [Wiki](https://github.com/pyed/transmission-telegram/wiki) for full command documentation and advanced setup.
