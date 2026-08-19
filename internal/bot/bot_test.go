@@ -80,3 +80,32 @@ func TestBot_CommandRegistration(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeCommand(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantCmd  string
+		wantLink bool
+	}{
+		{"/list", "list", false},
+		{"/list@MyTransmissionBot", "list", false},
+		{"/LiSt@my_bot", "list", false},
+		{"list", "list", false},
+		{"/info@TransmissionBot", "info", false},
+		{"/help", "help", false},
+		{"magnet:?xt=urn:btih:xyz", "add", true},
+		{"http://example.com/test.torrent", "add", true},
+		{"https://example.com/test.torrent", "add", true},
+		{"/add", "add", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			cmd, isLink := normalizeCommand(tt.input)
+			if cmd != tt.wantCmd || isLink != tt.wantLink {
+				t.Errorf("normalizeCommand(%q) = (%q, %v), want (%q, %v)",
+					tt.input, cmd, isLink, tt.wantCmd, tt.wantLink)
+			}
+		})
+	}
+}

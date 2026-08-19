@@ -69,6 +69,21 @@ func (b *Bot) Start(ctx context.Context) {
 	b.API.Start(ctx)
 }
 
+// normalizeCommand processes the raw first token of a message:
+// - detects magnet/http links
+// - strips leading "/"
+// - strips trailing "@botname" from group mentions
+// - lowercases the command
+func normalizeCommand(token string) (cmd string, isLink bool) {
+	if strings.HasPrefix(token, "magnet") || strings.HasPrefix(token, "http") {
+		return "add", true
+	}
+	token = strings.ToLower(token)
+	token = strings.TrimPrefix(token, "/")
+	token = strings.Split(token, "@")[0]
+	return token, false
+}
+
 // handleUpdate processes incoming updates from Telegram.
 func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Update) {
 	if update.Message == nil {
@@ -94,18 +109,23 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 	}
 
 	tokens := strings.Split(update.Message.Text, " ")
-
-	// Auto-detect magnet/http links and prepend "add" command
-	if strings.HasPrefix(tokens[0], "magnet") || strings.HasPrefix(tokens[0], "http") {
-		tokens = append([]string{"add"}, tokens...)
+	if len(tokens) == 0 || tokens[0] == "" {
+		if update.Message.Document != nil {
+			go b.receiveTorrent(ctx, update)
+		}
+		return
 	}
 
-	// Normalize command: lowercase and strip leading "/"
-	command := strings.ToLower(tokens[0])
-	command = strings.TrimPrefix(command, "/")
+	command, isLink := normalizeCommand(tokens[0])
+	var args []string
+	if isLink {
+		args = tokens
+	} else {
+		args = tokens[1:]
+	}
 
 	if handler, ok := b.commands[command]; ok {
-		go handler(ctx, update, tokens[1:])
+		go handler(ctx, update, args)
 	} else if command == "" {
 		go b.receiveTorrent(ctx, update)
 	} else {
