@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          check-latest: true
+
+      - name: Build and Package Multi-Platform Binaries
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          
+          PLATFORMS=(
+            "linux/amd64"
+            "linux/arm64"
+            "linux/arm/7"
+            "linux/arm/6"
+            "linux/386"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+            "windows/arm64"
+            "windows/386"
+            "freebsd/amd64"
+          )
+          
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            IFS="/" read -r OS ARCH EXTRA <<< "${PLATFORM}"
+            
+            BIN_NAME="transmission-telegram"
+            ARCHIVE_NAME="transmission-telegram_${TAG_NAME}_${OS}_${ARCH}"
+            
+            export GOOS=${OS}
+            export GOARCH=${ARCH}
+            export CGO_ENABLED=0
+            
+            if [ -n "${EXTRA}" ]; then
+              export GOARM=${EXTRA}
+              ARCHIVE_NAME="transmission-telegram_${TAG_NAME}_${OS}_${ARCH}v${EXTRA}"
+            else
+              unset GOARM
+            fi
+            
+            BUILD_DIR="build_${OS}_${ARCH}${EXTRA}"
+            mkdir -p "${BUILD_DIR}"
+            
+            TARGET_BIN="${BUILD_DIR}/${BIN_NAME}"
+            if [ "${OS}" = "windows" ]; then
+              TARGET_BIN="${TARGET_BIN}.exe"
+            fi
+            
+            echo "Building ${OS}/${ARCH}${EXTRA}..."
+            go build -trimpath -ldflags="-s -w" -o "${TARGET_BIN}" ./cmd/bot/
+            
+            cp README.md LICENSE "${BUILD_DIR}/"
+            
+            if [ "${OS}" = "windows" ]; then
+              (cd "${BUILD_DIR}" && zip -r "../dist/${ARCHIVE_NAME}.zip" .)
+            else
+              tar -czf "dist/${ARCHIVE_NAME}.tar.gz" -C "${BUILD_DIR}" .
+            fi
+            
+            rm -rf "${BUILD_DIR}"
+          done
+          
+          # Generate SHA-256 Checksums
+          cd dist
+          sha256sum * > "checksums.txt"
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
