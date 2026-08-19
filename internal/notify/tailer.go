@@ -2,7 +2,7 @@ package notify
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/pyed/tailer"
@@ -39,7 +39,7 @@ func ParseCompletionLog(line string) (string, bool) {
 	return name, true
 }
 
-func StartTailer(logFile string, getChatID ChatIDProvider, send SendFunc, logger *log.Logger) {
+func StartTailer(logFile string, getChatID ChatIDProvider, send SendFunc, logger *slog.Logger) {
 	go func() {
 		ft := tailer.RunFileTailer(logFile, false, nil)
 
@@ -57,7 +57,9 @@ func StartTailer(logFile string, getChatID ChatIDProvider, send SendFunc, logger
 					send(msg, cid, false)
 				}
 			case err := <-ft.Errors():
-				logger.Printf("[ERROR] tailing transmission log: %s", err)
+				if logger != nil {
+					logger.Error("Tailing transmission log failed", "error", err)
+				}
 				return
 			}
 		}

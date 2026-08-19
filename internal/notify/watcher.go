@@ -3,7 +3,7 @@ package notify
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -14,7 +14,7 @@ type TorrentsProvider func() (transmission.Torrents, error)
 
 // StartWatcher monitors Transmission torrent completion via periodic RPC polling.
 // This enables completion notifications without requiring access to a local log file.
-func StartWatcher(ctx context.Context, interval time.Duration, getTorrents TorrentsProvider, getChatID ChatIDProvider, send SendFunc, logger *log.Logger) {
+func StartWatcher(ctx context.Context, interval time.Duration, getTorrents TorrentsProvider, getChatID ChatIDProvider, send SendFunc, logger *slog.Logger) {
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
@@ -35,7 +35,7 @@ func StartWatcher(ctx context.Context, interval time.Duration, getTorrents Torre
 				torrents, err := getTorrents()
 				if err != nil {
 					if logger != nil {
-						logger.Printf("[WARN] notification watcher: %s", err)
+						logger.Warn("Notification watcher failed to get torrents", "error", err)
 					}
 					continue
 				}

@@ -89,7 +89,7 @@ func (b *Bot) SendWithKeyboard(ctx context.Context, text string, chatID int64, m
 
 		resp, err := b.API.SendMessage(ctx, params)
 		if err != nil {
-			b.Logger.Printf("[ERROR] Send: %s", err)
+			b.Logger.Error("SendMessage failed", "error", err)
 			continue
 		}
 		lastMsgID = resp.ID

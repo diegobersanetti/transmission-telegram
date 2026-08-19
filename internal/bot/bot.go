@@ -3,7 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,7 +20,7 @@ type Bot struct {
 	API    *tgbot.Bot
 	Client *transmission.TransmissionClient
 	Config *config.Config
-	Logger *log.Logger
+	Logger *slog.Logger
 
 	chatID       int64 // accessed atomically for thread safety
 	mdReplacer   *strings.Replacer
@@ -32,7 +32,11 @@ type Bot struct {
 type commandFunc func(ctx context.Context, ud *models.Update, args []string)
 
 // New creates a new Bot instance.
-func New(cfg *config.Config, client *transmission.TransmissionClient, logger *log.Logger) (*Bot, error) {
+func New(cfg *config.Config, client *transmission.TransmissionClient, logger *slog.Logger) (*Bot, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	b := &Bot{
 		Client: client,
 		Config: cfg,
@@ -60,7 +64,7 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *lo
 
 	me, err := api.GetMe(context.Background())
 	if err == nil {
-		logger.Printf("[INFO] Authorized: %s", me.Username)
+		logger.Info("Telegram bot authorized", "username", me.Username)
 	}
 
 	// Register command list with Telegram menu button
@@ -69,7 +73,7 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *lo
 			Commands: defaultBotCommands(),
 		})
 		if err != nil {
-			logger.Printf("[WARN] SetMyCommands: %s", err)
+			logger.Warn("SetMyCommands failed", "error", err)
 		}
 	}()
 
@@ -139,7 +143,7 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 		if fromStr == "" && update.Message.From != nil {
 			fromStr = update.Message.From.FirstName
 		}
-		b.Logger.Printf("[INFO] Ignored a message from: %s (ID: %d)", fromStr, userID)
+		b.Logger.Info("Ignored message from unauthorized sender", "sender", fromStr, "id", userID)
 		return
 	}
 

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,18 +17,28 @@ import (
 func main() {
 	cfg := config.Parse()
 
-	// Setup logger
-	logger := log.New(os.Stdout, "", log.LstdFlags)
+	// Setup structured logger
+	var logOutput *os.File = os.Stdout
 	if cfg.LogFile != "" {
 		logf, err := os.OpenFile(cfg.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Fprintf(os.Stderr, "[ERROR] Open logfile: %s\n", err)
+			os.Exit(1)
 		}
-		logger.SetOutput(logf)
+		defer logf.Close()
+		logOutput = logf
 	}
 
-	logger.Printf("[INFO] Token=****\n\t\tMasters=%s\n\t\tURL=%s\n\t\tUSER=%s\n\t\tPASS=****",
-		cfg.Masters, cfg.RPCURL, cfg.Username)
+	logger := slog.New(slog.NewTextHandler(logOutput, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	logger.Info("Starting transmission-telegram",
+		"version", config.VERSION,
+		"masters", cfg.Masters,
+		"url", cfg.RPCURL,
+		"user", cfg.Username,
+	)
 
 	// Initialize Transmission client
 	client, err := transmission.New(cfg.RPCURL, cfg.Username, cfg.Password)
