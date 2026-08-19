@@ -1,0 +1,182 @@
+package bot
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/dustin/go-humanize"
+	"github.com/pyed/transmission"
+	tgbotapi "gopkg.in/telegram-bot-api.v4"
+)
+
+// info takes an id of a torrent and returns some info about it
+func (b *Bot) info(ud tgbotapi.Update, args []string) {
+	if len(args) == 0 {
+		b.Send("*info:* needs a torrent ID number", ud.Message.Chat.ID, false)
+		return
+	}
+
+	for _, id := range args {
+		torrentID, err := strconv.Atoi(id)
+		if err != nil {
+			b.Send(fmt.Sprintf("*info:* %s is not a number", id), ud.Message.Chat.ID, false)
+			continue
+		}
+
+		// get the torrent
+		torrent, err := b.Client.GetTorrent(torrentID)
+		if err != nil {
+			b.Send(fmt.Sprintf("*info:* Can't find a torrent with an ID of %d", torrentID), ud.Message.Chat.ID, false)
+			continue
+		}
+
+		// get the trackers using 'trackerRegex'
+		var trackers string
+		for _, tracker := range torrent.Trackers {
+			sm := b.trackerRegex.FindSubmatch([]byte(tracker.Announce))
+			if len(sm) > 1 {
+				trackers += string(sm[1]) + " "
+			}
+		}
+
+		// format the info
+		torrentName := b.mdReplacer.Replace(torrent.Name) // escape markdown
+		info := fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
+			torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+			torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio(),
+			humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver), time.Unix(torrent.AddedDate, 0).Format(time.Stamp),
+			torrent.ETA(), trackers)
+
+		// send it
+		msgID := b.Send(info, ud.Message.Chat.ID, true)
+
+		// this go-routine will make the info live for 'duration * interval'
+		go func(torrentID, msgID int, trackers string) {
+			b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+				torrent, err := b.Client.GetTorrent(torrentID)
+				if err != nil {
+					return "" // skip this iteration if there's an error
+				}
+
+				torrentName := b.mdReplacer.Replace(torrent.Name)
+				return fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
+					torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+					torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio(),
+					humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver), time.Unix(torrent.AddedDate, 0).Format(time.Stamp),
+					torrent.ETA(), trackers)
+			}, func() string {
+				// fetch one final time for the dashes display
+				torrent, err := b.Client.GetTorrent(torrentID)
+				if err != nil {
+					return ""
+				}
+				torrentName := b.mdReplacer.Replace(torrent.Name)
+				return fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *- B*  ↑ *- B* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *-*\nTrackers: `%s`",
+					torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+					torrent.PercentDone*100, torrent.Ratio(), humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver),
+					time.Unix(torrent.AddedDate, 0).Format(time.Stamp), trackers)
+			})
+		}(torrentID, msgID, trackers)
+	}
+}
+
+// stats echo back transmission stats
+func (b *Bot) stats(ud tgbotapi.Update, args []string) {
+	stats, err := b.Client.GetStats()
+	if err != nil {
+		b.Send("*stats:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	msg := fmt.Sprintf(
+		`
+		Total: *%d*
+		Active: *%d*
+		Paused: *%d*
+
+		_Current Stats_
+		Downloaded: *%s*
+		Uploaded: *%s*
+		Running time: *%s*
+
+		_Accumulative Stats_
+		Sessions: *%d*
+		Downloaded: *%s*
+		Uploaded: *%s*
+		Total Running time: *%s*
+		`,
+
+		stats.TorrentCount,
+		stats.ActiveTorrentCount,
+		stats.PausedTorrentCount,
+		humanize.Bytes(stats.CurrentStats.DownloadedBytes),
+		humanize.Bytes(stats.CurrentStats.UploadedBytes),
+		stats.CurrentActiveTime(),
+		stats.CumulativeStats.SessionCount,
+		humanize.Bytes(stats.CumulativeStats.DownloadedBytes),
+		humanize.Bytes(stats.CumulativeStats.UploadedBytes),
+		stats.CumulativeActiveTime(),
+	)
+
+	b.Send(msg, ud.Message.Chat.ID, true)
+}
+
+// speed will echo back the current download and upload speeds
+func (b *Bot) speed(ud tgbotapi.Update, args []string) {
+	stats, err := b.Client.GetStats()
+	if err != nil {
+		b.Send("*speed:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	msg := fmt.Sprintf("↓ %s  ↑ %s", humanize.Bytes(stats.DownloadSpeed), humanize.Bytes(stats.UploadSpeed))
+
+	msgID := b.Send(msg, ud.Message.Chat.ID, false)
+
+	b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+		stats, err := b.Client.GetStats()
+		if err != nil {
+			return ""
+		}
+		return fmt.Sprintf("↓ %s  ↑ %s", humanize.Bytes(stats.DownloadSpeed), humanize.Bytes(stats.UploadSpeed))
+	}, func() string {
+		// show dashes to indicate that we are done updating.
+		return "↓ - B  ↑ - B"
+	})
+}
+
+// count returns current torrents count per status
+func (b *Bot) count(ud tgbotapi.Update, args []string) {
+	torrents, err := b.Client.GetTorrents()
+	if err != nil {
+		b.Send("*count:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	var downloading, seeding, stopped, checking, downloadingQ, seedingQ, checkingQ int
+
+	for i := range torrents {
+		switch torrents[i].Status {
+		case transmission.StatusDownloading:
+			downloading++
+		case transmission.StatusSeeding:
+			seeding++
+		case transmission.StatusStopped:
+			stopped++
+		case transmission.StatusChecking:
+			checking++
+		case transmission.StatusDownloadPending:
+			downloadingQ++
+		case transmission.StatusSeedPending:
+			seedingQ++
+		case transmission.StatusCheckPending:
+			checkingQ++
+		}
+	}
+
+	msg := fmt.Sprintf("Downloading: %d\nSeeding: %d\nPaused: %d\nVerifying: %d\n\n- Waiting to -\nDownload: %d\nSeed: %d\nVerify: %d\n\nTotal: %d",
+		downloading, seeding, stopped, checking, downloadingQ, seedingQ, checkingQ, len(torrents))
+
+	b.Send(msg, ud.Message.Chat.ID, false)
+}
