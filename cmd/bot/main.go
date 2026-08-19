@@ -47,9 +47,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Start log tailer for completion notifications
+	// Start completion notifications
 	if cfg.TransLogFile != "" {
 		notify.StartTailer(cfg.TransLogFile, b.ChatID, func(text string, chatID int64, markdown bool) int {
+			return b.Send(ctx, text, chatID, markdown)
+		}, logger)
+	} else {
+		notify.StartWatcher(ctx, cfg.Interval, client.GetTorrents, b.ChatID, func(text string, chatID int64, markdown bool) int {
 			return b.Send(ctx, text, chatID, markdown)
 		}, logger)
 	}
