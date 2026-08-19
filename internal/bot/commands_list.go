@@ -84,10 +84,10 @@ func (b *Bot) head(ctx context.Context, ud *models.Update, args []string) {
 	buf := new(bytes.Buffer)
 	for i := range torrents[:n] {
 		torrentName := b.mdReplacer.Replace(torrents[i].Name) // escape markdown
-		buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
-			torrents[i].ID, torrentName, torrents[i].TorrentStatus(), humanize.Bytes(torrents[i].Have()),
-			humanize.Bytes(torrents[i].SizeWhenDone), torrents[i].PercentDone*100, humanize.Bytes(torrents[i].RateDownload),
-			humanize.Bytes(torrents[i].RateUpload), torrents[i].Ratio()))
+		buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
+			torrents[i].ID, torrentName, progressBar(torrents[i].PercentDone, 10), torrents[i].TorrentStatus(),
+			torrents[i].PercentDone*100, humanize.Bytes(torrents[i].Have()), humanize.Bytes(torrents[i].SizeWhenDone),
+			humanize.Bytes(torrents[i].RateDownload), humanize.Bytes(torrents[i].RateUpload), torrents[i].Ratio()))
 	}
 
 	if buf.Len() == 0 {
@@ -112,10 +112,10 @@ func (b *Bot) head(ctx context.Context, ud *models.Update, args []string) {
 		}
 		for _, torrent := range torrents[:n] {
 			torrentName := b.mdReplacer.Replace(torrent.Name)
-			buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
-				torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()),
-				humanize.Bytes(torrent.SizeWhenDone), torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload),
-				humanize.Bytes(torrent.RateUpload), torrent.Ratio()))
+			buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
+				torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
+				torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+				humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio()))
 		}
 		return buf.String()
 	}, nil)
@@ -150,10 +150,10 @@ func (b *Bot) tail(ctx context.Context, ud *models.Update, args []string) {
 	buf := new(bytes.Buffer)
 	for _, torrent := range torrents[len(torrents)-n:] {
 		torrentName := b.mdReplacer.Replace(torrent.Name) // escape markdown
-		buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
-			torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()),
-			humanize.Bytes(torrent.SizeWhenDone), torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload),
-			humanize.Bytes(torrent.RateUpload), torrent.Ratio()))
+		buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
+			torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
+			torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+			humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio()))
 	}
 
 	if buf.Len() == 0 {
@@ -177,10 +177,10 @@ func (b *Bot) tail(ctx context.Context, ud *models.Update, args []string) {
 		}
 		for _, torrent := range torrents[len(torrents)-n:] {
 			torrentName := b.mdReplacer.Replace(torrent.Name)
-			buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
-				torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()),
-				humanize.Bytes(torrent.SizeWhenDone), torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload),
-				humanize.Bytes(torrent.RateUpload), torrent.Ratio()))
+			buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
+				torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
+				torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+				humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio()))
 		}
 		return buf.String()
 	}, nil)

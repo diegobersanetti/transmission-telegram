@@ -69,8 +69,8 @@ func (b *Bot) paused(ctx context.Context, ud *models.Update, args []string) {
 	buf := new(bytes.Buffer)
 	for i := range torrents {
 		if torrents[i].Status == transmission.StatusStopped {
-			buf.WriteString(fmt.Sprintf("<%d> %s\n%s (%.1f%%) DL: %s UL: %s  R: %s\n\n",
-				torrents[i].ID, torrents[i].Name, torrents[i].TorrentStatus(),
+			buf.WriteString(fmt.Sprintf("<%d> %s\n%s %s (%.1f%%) DL: %s UL: %s  R: %s\n\n",
+				torrents[i].ID, torrents[i].Name, progressBar(torrents[i].PercentDone, 10), torrents[i].TorrentStatus(),
 				torrents[i].PercentDone*100, humanize.Bytes(torrents[i].DownloadedEver),
 				humanize.Bytes(torrents[i].UploadedEver), torrents[i].Ratio()))
 		}
@@ -96,8 +96,8 @@ func (b *Bot) checking(ctx context.Context, ud *models.Update, args []string) {
 	for i := range torrents {
 		if torrents[i].Status == transmission.StatusChecking ||
 			torrents[i].Status == transmission.StatusCheckPending {
-			buf.WriteString(fmt.Sprintf("<%d> %s\n%s (%.1f%%)\n\n",
-				torrents[i].ID, torrents[i].Name, torrents[i].TorrentStatus(),
+			buf.WriteString(fmt.Sprintf("<%d> %s\n%s %s (%.1f%%)\n\n",
+				torrents[i].ID, torrents[i].Name, progressBar(torrents[i].PercentDone, 10), torrents[i].TorrentStatus(),
 				torrents[i].PercentDone*100))
 		}
 	}
@@ -123,9 +123,10 @@ func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 		if torrents[i].RateDownload > 0 ||
 			torrents[i].RateUpload > 0 {
 			torrentName := b.mdReplacer.Replace(torrents[i].Name)
-			buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
-				torrents[i].ID, torrentName, torrents[i].TorrentStatus(), humanize.Bytes(torrents[i].Have()),
-				humanize.Bytes(torrents[i].SizeWhenDone), torrents[i].PercentDone*100, humanize.Bytes(torrents[i].RateDownload),
+			buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
+				torrents[i].ID, torrentName, progressBar(torrents[i].PercentDone, 10), torrents[i].TorrentStatus(),
+				torrents[i].PercentDone*100, humanize.Bytes(torrents[i].Have()),
+				humanize.Bytes(torrents[i].SizeWhenDone), humanize.Bytes(torrents[i].RateDownload),
 				humanize.Bytes(torrents[i].RateUpload), torrents[i].Ratio()))
 		}
 	}
@@ -146,9 +147,10 @@ func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 			if torrents[i].RateDownload > 0 ||
 				torrents[i].RateUpload > 0 {
 				torrentName := b.mdReplacer.Replace(torrents[i].Name)
-				buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
-					torrents[i].ID, torrentName, torrents[i].TorrentStatus(), humanize.Bytes(torrents[i].Have()),
-					humanize.Bytes(torrents[i].SizeWhenDone), torrents[i].PercentDone*100, humanize.Bytes(torrents[i].RateDownload),
+				buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\n\n",
+					torrents[i].ID, torrentName, progressBar(torrents[i].PercentDone, 10), torrents[i].TorrentStatus(),
+					torrents[i].PercentDone*100, humanize.Bytes(torrents[i].Have()),
+					humanize.Bytes(torrents[i].SizeWhenDone), humanize.Bytes(torrents[i].RateDownload),
 					humanize.Bytes(torrents[i].RateUpload), torrents[i].Ratio()))
 			}
 		}
@@ -164,9 +166,10 @@ func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 			if torrents[i].RateDownload > 0 ||
 				torrents[i].RateUpload > 0 {
 				torrentName := b.mdReplacer.Replace(torrents[i].Name)
-				buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *-*  ↑ *-* R: *%s*\n\n",
-					torrents[i].ID, torrentName, torrents[i].TorrentStatus(), humanize.Bytes(torrents[i].Have()),
-					humanize.Bytes(torrents[i].SizeWhenDone), torrents[i].PercentDone*100, torrents[i].Ratio()))
+				buf.WriteString(fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *-*  ↑ *-* R: *%s*\n\n",
+					torrents[i].ID, torrentName, progressBar(torrents[i].PercentDone, 10), torrents[i].TorrentStatus(),
+					torrents[i].PercentDone*100, humanize.Bytes(torrents[i].Have()),
+					humanize.Bytes(torrents[i].SizeWhenDone), torrents[i].Ratio()))
 			}
 		}
 		return buf.String()

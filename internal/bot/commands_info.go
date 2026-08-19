@@ -43,9 +43,10 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 
 		// format the info
 		torrentName := b.mdReplacer.Replace(torrent.Name) // escape markdown
-		info := fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
-			torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
-			torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio(),
+		info := fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
+			torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
+			torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+			humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio(),
 			humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver), time.Unix(torrent.AddedDate, 0).Format(time.Stamp),
 			torrent.ETA(), trackers)
 
@@ -61,9 +62,10 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 				}
 
 				torrentName := b.mdReplacer.Replace(torrent.Name)
-				return fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
-					torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
-					torrent.PercentDone*100, humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio(),
+				return fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
+					torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
+					torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+					humanize.Bytes(torrent.RateDownload), humanize.Bytes(torrent.RateUpload), torrent.Ratio(),
 					humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver), time.Unix(torrent.AddedDate, 0).Format(time.Stamp),
 					torrent.ETA(), trackers)
 			}, func() string {
@@ -73,9 +75,10 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 					return ""
 				}
 				torrentName := b.mdReplacer.Replace(torrent.Name)
-				return fmt.Sprintf("`<%d>` *%s*\n%s *%s* of *%s* (*%.1f%%*) ↓ *- B*  ↑ *- B* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *-*\nTrackers: `%s`",
-					torrent.ID, torrentName, torrent.TorrentStatus(), humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
-					torrent.PercentDone*100, torrent.Ratio(), humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver),
+				return fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *- B*  ↑ *- B* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *-*\nTrackers: `%s`",
+					torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
+					torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
+					torrent.Ratio(), humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver),
 					time.Unix(torrent.AddedDate, 0).Format(time.Stamp), trackers)
 			})
 		}(torrentID, msgID, trackers)
