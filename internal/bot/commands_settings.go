@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
 )
@@ -205,4 +206,110 @@ func (b *Bot) speedLimit(ctx context.Context, ud *models.Update, args []string, 
 		fmt.Sprintf("*%s:* limit has been successfully changed to %d KB/s", limitType, limit),
 		ud.Message.Chat.ID, false,
 	)
+}
+
+// turtle toggles or sets alternative speed limits ("Turtle Mode")
+func (b *Bot) turtle(ctx context.Context, ud *models.Update, args []string) {
+	sess, err := b.Client.GetSession(ctx)
+	if err != nil {
+		b.Send(ctx, "*turtle:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	enabled := !sess.AltSpeedEnabled
+	if len(args) > 0 {
+		switch strings.ToLower(args[0]) {
+		case "on", "1", "true", "enable":
+			enabled = true
+		case "off", "0", "false", "disable":
+			enabled = false
+		}
+	}
+
+	if err := b.Client.SetAltSpeedEnabled(ctx, enabled); err != nil {
+		b.Send(ctx, "*turtle:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	if enabled {
+		b.Send(ctx, fmt.Sprintf("🐢 *Turtle mode enabled* (Limit: ↓ %d KB/s  ↑ %d KB/s)", sess.AltSpeedDown, sess.AltSpeedUp), ud.Message.Chat.ID, true)
+	} else {
+		b.Send(ctx, "🐇 *Turtle mode disabled*", ud.Message.Chat.ID, true)
+	}
+}
+
+// free checks and displays available disk space for the download directory
+func (b *Bot) free(ctx context.Context, ud *models.Update, args []string) {
+	path := ""
+	if len(args) > 0 {
+		path = args[0]
+	} else {
+		sess, err := b.Client.GetSession(ctx)
+		if err != nil {
+			b.Send(ctx, "*free:* "+err.Error(), ud.Message.Chat.ID, false)
+			return
+		}
+		path = sess.DownloadDir
+	}
+
+	freeBytes, totalBytes, err := b.Client.FreeSpace(ctx, path)
+	if err != nil {
+		b.Send(ctx, "*free:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	var msg string
+	if totalBytes > 0 {
+		pctFree := (float64(freeBytes) / float64(totalBytes)) * 100.0
+		msg = fmt.Sprintf("💾 *Directory:* `%s`\n*Free Space:* *%s* of *%s* (%.1f%% free)",
+			b.mdReplacer.Replace(path), humanize.Bytes(uint64(freeBytes)), humanize.Bytes(uint64(totalBytes)), pctFree)
+	} else {
+		msg = fmt.Sprintf("💾 *Directory:* `%s`\n*Free Space:* *%s*",
+			b.mdReplacer.Replace(path), humanize.Bytes(uint64(freeBytes)))
+	}
+
+	b.Send(ctx, msg, ud.Message.Chat.ID, true)
+}
+
+// reannounce forces an immediate tracker re-announce
+func (b *Bot) reannounce(ctx context.Context, ud *models.Update, args []string) {
+	if len(args) == 0 {
+		b.Send(ctx, "*reannounce:* please provide torrent IDs or _all_", ud.Message.Chat.ID, true)
+		return
+	}
+
+	if strings.ToLower(args[0]) == "all" {
+		torrents, err := b.Client.GetTorrents(ctx)
+		if err != nil {
+			b.Send(ctx, "*reannounce:* "+err.Error(), ud.Message.Chat.ID, false)
+			return
+		}
+		if err := b.Client.ReannounceTorrents(ctx, torrents.GetIDs()...); err != nil {
+			b.Send(ctx, "*reannounce:* "+err.Error(), ud.Message.Chat.ID, false)
+			return
+		}
+		b.Send(ctx, "📡 Re-announced all torrents to trackers", ud.Message.Chat.ID, false)
+		return
+	}
+
+	var ids []int
+	for _, idStr := range args {
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+
+	if len(ids) == 0 {
+		b.Send(ctx, "*reannounce:* no valid IDs provided", ud.Message.Chat.ID, false)
+		return
+	}
+
+	if err := b.Client.ReannounceTorrents(ctx, ids...); err != nil {
+		b.Send(ctx, "*reannounce:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	b.Send(ctx, fmt.Sprintf("📡 Re-announced %d torrent(s) to trackers", len(ids)), ud.Message.Chat.ID, false)
 }

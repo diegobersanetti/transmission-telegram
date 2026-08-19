@@ -14,3 +14,5 @@ require (
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 )
+
+replace github.com/pyed/transmission => ../transmission

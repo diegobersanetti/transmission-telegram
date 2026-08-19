@@ -38,6 +38,9 @@ func (b *Bot) registerCommands() {
 		"count": b.count, "co": b.count,
 		"del": b.del, "rm": b.del,
 		"deldata": b.deldata,
+		"turtle": b.turtle, "alt": b.turtle, "tu": b.turtle,
+		"free": b.free, "space": b.free, "disk": b.free,
+		"reannounce": b.reannounce, "ra": b.reannounce,
 		"help": b.help,
 		"version": b.version, "ver": b.version,
 	}

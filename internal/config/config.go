@@ -90,6 +90,15 @@ const (
 	*speed* or *ss*
 	Shows the upload and download speeds.
 
+	*turtle* or *alt* or *tu*
+	Toggle alternative speed limits ("Turtle Mode") on or off.
+
+	*free* or *space* or *disk*
+	Shows available and total storage space for the download directory.
+
+	*reannounce* or *ra*
+	Forces an immediate tracker re-announce for specified torrent IDs or _all_.
+
 	*count* or *co*
 	Shows the torrents counts per status.
 

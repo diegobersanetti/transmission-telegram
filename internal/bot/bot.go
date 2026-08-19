@@ -94,6 +94,8 @@ func defaultBotCommands() []models.BotCommand {
 		{Command: "errors", Description: "List torrents with errors"},
 		{Command: "speed", Description: "Show current upload & download speeds"},
 		{Command: "stats", Description: "Show Transmission cumulative stats"},
+		{Command: "free", Description: "Show download directory free disk space"},
+		{Command: "turtle", Description: "Toggle Turtle Mode (alternative speed limits)"},
 		{Command: "count", Description: "Show torrent count by status"},
 		{Command: "help", Description: "Show help message"},
 		{Command: "version", Description: "Show Transmission & bot versions"},

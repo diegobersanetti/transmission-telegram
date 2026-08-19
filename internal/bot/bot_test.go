@@ -70,6 +70,9 @@ func TestBot_CommandRegistration(t *testing.T) {
 		"count", "co",
 		"del", "rm",
 		"deldata",
+		"turtle", "alt", "tu",
+		"free", "space", "disk",
+		"reannounce", "ra",
 		"help",
 		"version", "ver",
 	}
