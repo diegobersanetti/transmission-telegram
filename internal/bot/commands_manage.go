@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dustin/go-humanize"
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
@@ -32,7 +33,14 @@ func (b *Bot) add(ctx context.Context, ud *models.Update, args []string) {
 			b.Send(ctx, "*add:* error adding "+url, ud.Message.Chat.ID, false)
 			continue
 		}
-		b.Send(ctx, fmt.Sprintf("*Added:* <%d> %s", torrent.ID, torrent.Name), ud.Message.Chat.ID, false)
+
+		torrentInfo, err := b.Client.GetTorrent(torrent.ID)
+		if err == nil && torrentInfo != nil && torrentInfo.SizeWhenDone > 0 {
+			b.Send(ctx, fmt.Sprintf("*Added:* `<%d>` *%s* (%s)",
+				torrent.ID, b.mdReplacer.Replace(torrent.Name), humanize.Bytes(torrentInfo.SizeWhenDone)), ud.Message.Chat.ID, true)
+		} else {
+			b.Send(ctx, fmt.Sprintf("*Added:* `<%d>` %s", torrent.ID, torrent.Name), ud.Message.Chat.ID, false)
+		}
 	}
 }
 
