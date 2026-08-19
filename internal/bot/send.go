@@ -89,8 +89,15 @@ func (b *Bot) SendWithKeyboard(ctx context.Context, text string, chatID int64, m
 
 		resp, err := b.API.SendMessage(ctx, params)
 		if err != nil {
-			b.Logger.Error("SendMessage failed", "error", err)
-			continue
+			if markdown {
+				b.Logger.Warn("SendMessage with Markdown failed, retrying as plain text", "error", err, "chat_id", chatID)
+				params.ParseMode = ""
+				resp, err = b.API.SendMessage(ctx, params)
+			}
+			if err != nil {
+				b.Logger.Error("SendMessage failed", "error", err, "chat_id", chatID)
+				continue
+			}
 		}
 		lastMsgID = resp.ID
 	}

@@ -54,6 +54,9 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *sl
 
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(b.handleUpdate),
+		tgbot.WithErrorsHandler(func(err error) {
+			logger.Error("Telegram API error", "error", err)
+		}),
 	}
 
 	api, err := tgbot.New(cfg.BotToken, opts...)
@@ -61,6 +64,11 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *sl
 		return nil, err
 	}
 	b.API = api
+
+	// Remove any stale webhook so long polling receives updates reliably
+	_, _ = api.DeleteWebhook(context.Background(), &tgbot.DeleteWebhookParams{
+		DropPendingUpdates: false,
+	})
 
 	me, err := api.GetMe(context.Background())
 	if err == nil {
@@ -143,37 +151,52 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 	if !b.Config.Masters.Contains(username, userID) {
 		fromStr := username
 		if fromStr == "" && update.Message.From != nil {
-			fromStr = update.Message.From.FirstName
+			fromStr = fmt.Sprintf("%s (ID: %d)", update.Message.From.FirstName, userID)
 		}
-		b.Logger.Info("Ignored message from unauthorized sender", "sender", fromStr, "id", userID)
+		b.Logger.Warn("Ignored message from unauthorized sender",
+			"sender", fromStr,
+			"username", username,
+			"user_id", userID,
+			"chat_id", update.Message.Chat.ID,
+			"allowed_masters", b.Config.Masters,
+		)
 		return
 	}
 
-	if b.Config.TransLogFile != "" && atomic.LoadInt64(&b.chatID) != update.Message.Chat.ID {
-		atomic.StoreInt64(&b.chatID, update.Message.Chat.ID)
-	}
+	// Always store active chat ID for notifications
+	atomic.StoreInt64(&b.chatID, update.Message.Chat.ID)
 
-	tokens := strings.Split(update.Message.Text, " ")
-	if len(tokens) == 0 || tokens[0] == "" {
+	b.Logger.Info("Received message",
+		"sender", username,
+		"user_id", userID,
+		"chat_id", update.Message.Chat.ID,
+		"text", update.Message.Text,
+	)
+
+	fields := strings.Fields(update.Message.Text)
+	if len(fields) == 0 {
 		if update.Message.Document != nil {
 			go b.receiveTorrent(ctx, update)
 		}
 		return
 	}
 
-	command, isLink := normalizeCommand(tokens[0])
+	command, isLink := normalizeCommand(fields[0])
 	var args []string
 	if isLink {
-		args = tokens
+		args = fields
 	} else {
-		args = tokens[1:]
+		args = fields[1:]
 	}
+
+	b.Logger.Info("Dispatching command", "command", command, "args", args, "sender", username)
 
 	if handler, ok := b.commands[command]; ok {
 		go handler(ctx, update, args)
 	} else if command == "" {
 		go b.receiveTorrent(ctx, update)
 	} else {
+		b.Logger.Warn("Unknown command", "command", command, "sender", username)
 		go b.Send(ctx, "No such command, try /help", update.Message.Chat.ID, false)
 	}
 }
