@@ -109,3 +109,27 @@ func TestNormalizeCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultBotCommands(t *testing.T) {
+	b := &Bot{
+		Config: &config.Config{},
+	}
+	b.registerCommands()
+
+	cmds := defaultBotCommands()
+	if len(cmds) == 0 {
+		t.Fatalf("expected non-empty defaultBotCommands")
+	}
+
+	for _, c := range cmds {
+		if strings.HasPrefix(c.Command, "/") {
+			t.Errorf("command %q should not have leading slash", c.Command)
+		}
+		if c.Description == "" {
+			t.Errorf("command %q has empty description", c.Command)
+		}
+		if _, ok := b.commands[c.Command]; !ok {
+			t.Errorf("menu command %q is not registered in bot handlers", c.Command)
+		}
+	}
+}

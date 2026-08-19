@@ -61,7 +61,37 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *lo
 		logger.Printf("[INFO] Authorized: %s", me.Username)
 	}
 
+	// Register command list with Telegram menu button
+	go func() {
+		_, err := api.SetMyCommands(context.Background(), &tgbot.SetMyCommandsParams{
+			Commands: defaultBotCommands(),
+		})
+		if err != nil {
+			logger.Printf("[WARN] SetMyCommands: %s", err)
+		}
+	}()
+
 	return b, nil
+}
+
+// defaultBotCommands returns the list of primary commands to display in Telegram's menu.
+func defaultBotCommands() []models.BotCommand {
+	return []models.BotCommand{
+		{Command: "list", Description: "List torrents (optional tracker filter)"},
+		{Command: "head", Description: "List first n torrents with live speed"},
+		{Command: "tail", Description: "List last n torrents with live speed"},
+		{Command: "active", Description: "List active uploading/downloading torrents"},
+		{Command: "downs", Description: "List downloading torrents"},
+		{Command: "seeding", Description: "List seeding torrents"},
+		{Command: "paused", Description: "List paused torrents"},
+		{Command: "checking", Description: "List verifying torrents"},
+		{Command: "errors", Description: "List torrents with errors"},
+		{Command: "speed", Description: "Show current upload & download speeds"},
+		{Command: "stats", Description: "Show Transmission cumulative stats"},
+		{Command: "count", Description: "Show torrent count by status"},
+		{Command: "help", Description: "Show help message"},
+		{Command: "version", Description: "Show Transmission & bot versions"},
+	}
 }
 
 // Start starts the bot polling loop (blocks until context is cancelled).
