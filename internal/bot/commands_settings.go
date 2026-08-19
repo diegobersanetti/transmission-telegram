@@ -2,18 +2,19 @@ package bot
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
 // sort changes torrents sorting
-func (b *Bot) sort(ud tgbotapi.Update, args []string) {
+func (b *Bot) sort(ctx context.Context, ud *models.Update, args []string) {
 	if len(args) == 0 {
-		b.Send(`*sort* takes one of:
+		b.Send(ctx, `*sort* takes one of:
 			(*id, name, age, size, progress, downspeed, upspeed, download, upload, ratio*)
 			optionally start with (*rev*) for reversed order
 			e.g. "*sort rev size*" to get biggest torrents first.`, ud.Message.Chat.ID, true)
@@ -88,22 +89,22 @@ func (b *Bot) sort(ud tgbotapi.Update, args []string) {
 		}
 		b.Client.SetSort(transmission.SortRatio)
 	default:
-		b.Send("unkown sorting method", ud.Message.Chat.ID, false)
+		b.Send(ctx, "unkown sorting method", ud.Message.Chat.ID, false)
 		return
 	}
 
 	if reversed {
-		b.Send("*sort:* reversed "+args[0], ud.Message.Chat.ID, false)
+		b.Send(ctx, "*sort:* reversed "+args[0], ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send("*sort:* "+args[0], ud.Message.Chat.ID, false)
+	b.Send(ctx, "*sort:* "+args[0], ud.Message.Chat.ID, false)
 }
 
 // trackers will send a list of trackers and how many torrents each one has
-func (b *Bot) trackers(ud tgbotapi.Update, args []string) {
+func (b *Bot) trackers(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*trackers:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*trackers:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -125,16 +126,16 @@ func (b *Bot) trackers(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("No trackers!", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No trackers!", ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // downloaddir takes a path and sets it as the download directory
-func (b *Bot) downloaddir(ud tgbotapi.Update, args []string) {
+func (b *Bot) downloaddir(ctx context.Context, ud *models.Update, args []string) {
 	if len(args) < 1 {
-		b.Send("Please, specify a path for downloaddir", ud.Message.Chat.ID, false)
+		b.Send(ctx, "Please, specify a path for downloaddir", ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -145,60 +146,62 @@ func (b *Bot) downloaddir(ud tgbotapi.Update, args []string) {
 
 	out, err := b.Client.ExecuteCommand(cmd)
 	if err != nil {
-		b.Send("*downloaddir:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*downloaddir:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 	if out.Result != "success" {
-		b.Send("*downloaddir:* "+out.Result, ud.Message.Chat.ID, false)
+		b.Send(ctx, "*downloaddir:* "+out.Result, ud.Message.Chat.ID, false)
 		return
 	}
 
 	b.Send(
+		ctx,
 		"*downloaddir:* downloaddir has been successfully changed to"+downloadDir,
 		ud.Message.Chat.ID, false,
 	)
 }
 
 // downlimit sets the global downlimit to a provided value in kilobytes
-func (b *Bot) downlimit(ud tgbotapi.Update, args []string) {
-	b.speedLimit(ud, args, transmission.DownloadLimitType)
+func (b *Bot) downlimit(ctx context.Context, ud *models.Update, args []string) {
+	b.speedLimit(ctx, ud, args, transmission.DownloadLimitType)
 }
 
 // uplimit sets the global uplimit to a provided value in kilobytes
-func (b *Bot) uplimit(ud tgbotapi.Update, args []string) {
-	b.speedLimit(ud, args, transmission.UploadLimitType)
+func (b *Bot) uplimit(ctx context.Context, ud *models.Update, args []string) {
+	b.speedLimit(ctx, ud, args, transmission.UploadLimitType)
 }
 
 // speedLimit sets either a download or upload limit
-func (b *Bot) speedLimit(ud tgbotapi.Update, args []string, limitType transmission.SpeedLimitType) {
+func (b *Bot) speedLimit(ctx context.Context, ud *models.Update, args []string, limitType transmission.SpeedLimitType) {
 	if len(args) < 1 {
-		b.Send("Please, specify the limit", ud.Message.Chat.ID, false)
+		b.Send(ctx, "Please, specify the limit", ud.Message.Chat.ID, false)
 		return
 	}
 
 	limit, err := strconv.ParseUint(args[0], 10, 32)
 	if err != nil {
-		b.Send("Please, specify the limit as number of kilobytes", ud.Message.Chat.ID, false)
+		b.Send(ctx, "Please, specify the limit as number of kilobytes", ud.Message.Chat.ID, false)
 		return
 	}
 
 	speedLimitCmd := transmission.NewSpeedLimitCommand(limitType, uint(limit))
 	if speedLimitCmd == nil {
-		b.Send(fmt.Sprintf("*%s:* internal error", limitType), ud.Message.Chat.ID, false)
+		b.Send(ctx, fmt.Sprintf("*%s:* internal error", limitType), ud.Message.Chat.ID, false)
 		return
 	}
 
 	out, err := b.Client.ExecuteCommand(speedLimitCmd)
 	if err != nil {
-		b.Send(fmt.Sprintf("*%s:* %v", limitType, err.Error()), ud.Message.Chat.ID, false)
+		b.Send(ctx, fmt.Sprintf("*%s:* %v", limitType, err.Error()), ud.Message.Chat.ID, false)
 		return
 	}
 	if out.Result != "success" {
-		b.Send(fmt.Sprintf("*%s:* %v", limitType, out.Result), ud.Message.Chat.ID, false)
+		b.Send(ctx, fmt.Sprintf("*%s:* %v", limitType, out.Result), ud.Message.Chat.ID, false)
 		return
 	}
 
 	b.Send(
+		ctx,
 		fmt.Sprintf("*%s:* limit has been successfully changed to %d KB/s", limitType, limit),
 		ud.Message.Chat.ID, false,
 	)

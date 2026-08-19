@@ -1,15 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/pyed/transmission"
 	"github.com/pyed/transmission-telegram/internal/bot"
 	"github.com/pyed/transmission-telegram/internal/config"
 	"github.com/pyed/transmission-telegram/internal/notify"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
 func main() {
@@ -35,30 +37,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize Telegram bot
-	api, err := tgbotapi.NewBotAPI(cfg.BotToken)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Telegram: %s\n", err)
-		os.Exit(1)
-	}
-	logger.Printf("[INFO] Authorized: %s", api.Self.UserName)
-
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-	updates, err := api.GetUpdatesChan(u)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Telegram: %s\n", err)
-		os.Exit(1)
-	}
-
 	// Create bot instance
-	b := bot.New(cfg, client, api, logger)
+	b, err := bot.New(cfg, client, logger)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Telegram: %s\n", err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	// Start log tailer for completion notifications
 	if cfg.TransLogFile != "" {
-		notify.StartTailer(cfg.TransLogFile, b.ChatID, b.Send, logger)
+		notify.StartTailer(cfg.TransLogFile, b.ChatID, func(text string, chatID int64, markdown bool) int {
+			return b.Send(ctx, text, chatID, markdown)
+		}, logger)
 	}
 
-	// Run the bot
-	b.Run(updates)
+	// Run the bot (blocks until context is cancelled)
+	b.Start(ctx)
 }

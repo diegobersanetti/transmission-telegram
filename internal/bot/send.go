@@ -1,18 +1,31 @@
 package bot
 
 import (
+	"context"
 	"strings"
 	"unicode/utf8"
 
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 )
 
 // Send sends a message to a chat, splitting long messages safely.
 // Returns the message ID of the last sent message.
-func (b *Bot) Send(text string, chatID int64, markdown bool) int {
+func (b *Bot) Send(ctx context.Context, text string, chatID int64, markdown bool) int {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// set typing action
-	action := tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)
-	b.API.Send(action)
+	b.API.SendChatAction(ctx, &tgbot.SendChatActionParams{
+		ChatID: chatID,
+		Action: models.ChatActionTyping,
+	})
+
+	var parseMode models.ParseMode
+	if markdown {
+		parseMode = models.ParseModeMarkdownV1
+	}
 
 	// Telegram is limited to 4096 chars per message.
 	// Split long messages on newline boundaries.
@@ -33,12 +46,15 @@ func (b *Bot) Send(text string, chatID int64, markdown bool) int {
 			splitAt = byteLimit
 		}
 
-		msg := tgbotapi.NewMessage(chatID, text[:splitAt])
-		msg.DisableWebPagePreview = true
-		if markdown {
-			msg.ParseMode = tgbotapi.ModeMarkdown
-		}
-		if _, err := b.API.Send(msg); err != nil {
+		_, err := b.API.SendMessage(ctx, &tgbot.SendMessageParams{
+			ChatID:    chatID,
+			Text:      text[:splitAt],
+			ParseMode: parseMode,
+			LinkPreviewOptions: &models.LinkPreviewOptions{
+				IsDisabled: tgbot.True(),
+			},
+		})
+		if err != nil {
 			b.Logger.Printf("[ERROR] Send: %s", err)
 		}
 
@@ -50,16 +66,18 @@ func (b *Bot) Send(text string, chatID int64, markdown bool) int {
 	}
 
 	// Send the remaining (or only) chunk.
-	msg := tgbotapi.NewMessage(chatID, text)
-	msg.DisableWebPagePreview = true
-	if markdown {
-		msg.ParseMode = tgbotapi.ModeMarkdown
-	}
-
-	resp, err := b.API.Send(msg)
+	resp, err := b.API.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: parseMode,
+		LinkPreviewOptions: &models.LinkPreviewOptions{
+			IsDisabled: tgbot.True(),
+		},
+	})
 	if err != nil {
 		b.Logger.Printf("[ERROR] Send: %s", err)
+		return 0
 	}
 
-	return resp.MessageID
+	return resp.ID
 }

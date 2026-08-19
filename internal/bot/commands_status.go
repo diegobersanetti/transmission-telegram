@@ -2,18 +2,19 @@ package bot
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/dustin/go-humanize"
+	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
 // downs will send the names of torrents with status 'Downloading' or in queue to
-func (b *Bot) downs(ud tgbotapi.Update, args []string) {
+func (b *Bot) downs(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*downs:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*downs:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -27,17 +28,17 @@ func (b *Bot) downs(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("No downloads", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No downloads", ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // seeding will send the names of the torrents with the status 'Seeding' or in the queue to
-func (b *Bot) seeding(ud tgbotapi.Update, args []string) {
+func (b *Bot) seeding(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*seeding:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*seeding:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -50,18 +51,18 @@ func (b *Bot) seeding(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("No torrents seeding", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No torrents seeding", ud.Message.Chat.ID, false)
 		return
 	}
 
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // paused will send the names of the torrents with status 'Paused'
-func (b *Bot) paused(ud tgbotapi.Update, args []string) {
+func (b *Bot) paused(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*paused:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*paused:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -76,18 +77,18 @@ func (b *Bot) paused(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("No paused torrents", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No paused torrents", ud.Message.Chat.ID, false)
 		return
 	}
 
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // checking will send the names of torrents with the status 'verifying' or in the queue to
-func (b *Bot) checking(ud tgbotapi.Update, args []string) {
+func (b *Bot) checking(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*checking:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*checking:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -102,18 +103,18 @@ func (b *Bot) checking(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("No torrents verifying", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No torrents verifying", ud.Message.Chat.ID, false)
 		return
 	}
 
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // active will send torrents that are actively downloading or uploading
-func (b *Bot) active(ud tgbotapi.Update, args []string) {
+func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*active:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*active:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -129,13 +130,13 @@ func (b *Bot) active(ud tgbotapi.Update, args []string) {
 		}
 	}
 	if buf.Len() == 0 {
-		b.Send("No active torrents", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No active torrents", ud.Message.Chat.ID, false)
 		return
 	}
 
-	msgID := b.Send(buf.String(), ud.Message.Chat.ID, true)
+	msgID := b.Send(ctx, buf.String(), ud.Message.Chat.ID, true)
 
-	b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		buf.Reset()
 		torrents, err = b.Client.GetTorrents()
 		if err != nil {
@@ -173,10 +174,10 @@ func (b *Bot) active(ud tgbotapi.Update, args []string) {
 }
 
 // errors will send torrents with errors
-func (b *Bot) errors(ud tgbotapi.Update, args []string) {
+func (b *Bot) errors(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*errors:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*errors:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -188,8 +189,8 @@ func (b *Bot) errors(ud tgbotapi.Update, args []string) {
 		}
 	}
 	if buf.Len() == 0 {
-		b.Send("No errors", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No errors", ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }

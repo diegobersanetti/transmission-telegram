@@ -1,33 +1,34 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
 // info takes an id of a torrent and returns some info about it
-func (b *Bot) info(ud tgbotapi.Update, args []string) {
+func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 	if len(args) == 0 {
-		b.Send("*info:* needs a torrent ID number", ud.Message.Chat.ID, false)
+		b.Send(ctx, "*info:* needs a torrent ID number", ud.Message.Chat.ID, false)
 		return
 	}
 
 	for _, id := range args {
 		torrentID, err := strconv.Atoi(id)
 		if err != nil {
-			b.Send(fmt.Sprintf("*info:* %s is not a number", id), ud.Message.Chat.ID, false)
+			b.Send(ctx, fmt.Sprintf("*info:* %s is not a number", id), ud.Message.Chat.ID, false)
 			continue
 		}
 
 		// get the torrent
 		torrent, err := b.Client.GetTorrent(torrentID)
 		if err != nil {
-			b.Send(fmt.Sprintf("*info:* Can't find a torrent with an ID of %d", torrentID), ud.Message.Chat.ID, false)
+			b.Send(ctx, fmt.Sprintf("*info:* Can't find a torrent with an ID of %d", torrentID), ud.Message.Chat.ID, false)
 			continue
 		}
 
@@ -49,11 +50,11 @@ func (b *Bot) info(ud tgbotapi.Update, args []string) {
 			torrent.ETA(), trackers)
 
 		// send it
-		msgID := b.Send(info, ud.Message.Chat.ID, true)
+		msgID := b.Send(ctx, info, ud.Message.Chat.ID, true)
 
 		// this go-routine will make the info live for 'duration * interval'
 		go func(torrentID, msgID int, trackers string) {
-			b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+			b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 				torrent, err := b.Client.GetTorrent(torrentID)
 				if err != nil {
 					return "" // skip this iteration if there's an error
@@ -82,10 +83,10 @@ func (b *Bot) info(ud tgbotapi.Update, args []string) {
 }
 
 // stats echo back transmission stats
-func (b *Bot) stats(ud tgbotapi.Update, args []string) {
+func (b *Bot) stats(ctx context.Context, ud *models.Update, args []string) {
 	stats, err := b.Client.GetStats()
 	if err != nil {
-		b.Send("*stats:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*stats:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -119,22 +120,22 @@ func (b *Bot) stats(ud tgbotapi.Update, args []string) {
 		stats.CumulativeActiveTime(),
 	)
 
-	b.Send(msg, ud.Message.Chat.ID, true)
+	b.Send(ctx, msg, ud.Message.Chat.ID, true)
 }
 
 // speed will echo back the current download and upload speeds
-func (b *Bot) speed(ud tgbotapi.Update, args []string) {
+func (b *Bot) speed(ctx context.Context, ud *models.Update, args []string) {
 	stats, err := b.Client.GetStats()
 	if err != nil {
-		b.Send("*speed:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*speed:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
 	msg := fmt.Sprintf("↓ %s  ↑ %s", humanize.Bytes(stats.DownloadSpeed), humanize.Bytes(stats.UploadSpeed))
 
-	msgID := b.Send(msg, ud.Message.Chat.ID, false)
+	msgID := b.Send(ctx, msg, ud.Message.Chat.ID, false)
 
-	b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		stats, err := b.Client.GetStats()
 		if err != nil {
 			return ""
@@ -147,10 +148,10 @@ func (b *Bot) speed(ud tgbotapi.Update, args []string) {
 }
 
 // count returns current torrents count per status
-func (b *Bot) count(ud tgbotapi.Update, args []string) {
+func (b *Bot) count(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*count:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*count:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -178,5 +179,5 @@ func (b *Bot) count(ud tgbotapi.Update, args []string) {
 	msg := fmt.Sprintf("Downloading: %d\nSeeding: %d\nPaused: %d\nVerifying: %d\n\n- Waiting to -\nDownload: %d\nSeed: %d\nVerify: %d\n\nTotal: %d",
 		downloading, seeding, stopped, checking, downloadingQ, seedingQ, checkingQ, len(torrents))
 
-	b.Send(msg, ud.Message.Chat.ID, false)
+	b.Send(ctx, msg, ud.Message.Chat.ID, false)
 }

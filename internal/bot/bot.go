@@ -1,19 +1,21 @@
 package bot
 
 import (
+	"context"
 	"log"
 	"regexp"
 	"strings"
 	"sync/atomic"
 
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
 	"github.com/pyed/transmission-telegram/internal/config"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
 // Bot manages the Telegram bot and Transmission client interaction.
 type Bot struct {
-	API    *tgbotapi.BotAPI
+	API    *tgbot.Bot
 	Client *transmission.TransmissionClient
 	Config *config.Config
 	Logger *log.Logger
@@ -25,12 +27,11 @@ type Bot struct {
 }
 
 // commandFunc is the handler signature for bot commands.
-type commandFunc func(ud tgbotapi.Update, args []string)
+type commandFunc func(ctx context.Context, ud *models.Update, args []string)
 
 // New creates a new Bot instance.
-func New(cfg *config.Config, client *transmission.TransmissionClient, api *tgbotapi.BotAPI, logger *log.Logger) *Bot {
+func New(cfg *config.Config, client *transmission.TransmissionClient, logger *log.Logger) (*Bot, error) {
 	b := &Bot{
-		API:    api,
 		Client: client,
 		Config: cfg,
 		Logger: logger,
@@ -44,43 +45,71 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, api *tgbot
 		trackerRegex: regexp.MustCompile(`[https?|udp]://([^:/]*)`),
 	}
 	b.registerCommands()
-	return b
+
+	opts := []tgbot.Option{
+		tgbot.WithDefaultHandler(b.handleUpdate),
+	}
+
+	api, err := tgbot.New(cfg.BotToken, opts...)
+	if err != nil {
+		return nil, err
+	}
+	b.API = api
+
+	me, err := api.GetMe(context.Background())
+	if err == nil {
+		logger.Printf("[INFO] Authorized: %s", me.Username)
+	}
+
+	return b, nil
 }
 
-// Run starts the main update processing loop.
-func (b *Bot) Run(updates <-chan tgbotapi.Update) {
-	for update := range updates {
-		if update.Message == nil {
-			continue
+// Start starts the bot polling loop (blocks until context is cancelled).
+func (b *Bot) Start(ctx context.Context) {
+	b.API.Start(ctx)
+}
+
+// handleUpdate processes incoming updates from Telegram.
+func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Update) {
+	if update.Message == nil {
+		return
+	}
+
+	username := ""
+	if update.Message.From != nil {
+		username = update.Message.From.Username
+	}
+
+	if !b.Config.Masters.Contains(username) {
+		fromStr := username
+		if fromStr == "" && update.Message.From != nil {
+			fromStr = update.Message.From.FirstName
 		}
+		b.Logger.Printf("[INFO] Ignored a message from: %s", fromStr)
+		return
+	}
 
-		if !b.Config.Masters.Contains(update.Message.From.UserName) {
-			b.Logger.Printf("[INFO] Ignored a message from: %s", update.Message.From.String())
-			continue
-		}
+	if b.Config.TransLogFile != "" && atomic.LoadInt64(&b.chatID) != update.Message.Chat.ID {
+		atomic.StoreInt64(&b.chatID, update.Message.Chat.ID)
+	}
 
-		if b.Config.TransLogFile != "" && atomic.LoadInt64(&b.chatID) != update.Message.Chat.ID {
-			atomic.StoreInt64(&b.chatID, update.Message.Chat.ID)
-		}
+	tokens := strings.Split(update.Message.Text, " ")
 
-		tokens := strings.Split(update.Message.Text, " ")
+	// Auto-detect magnet/http links and prepend "add" command
+	if strings.HasPrefix(tokens[0], "magnet") || strings.HasPrefix(tokens[0], "http") {
+		tokens = append([]string{"add"}, tokens...)
+	}
 
-		// Auto-detect magnet/http links and prepend "add" command
-		if strings.HasPrefix(tokens[0], "magnet") || strings.HasPrefix(tokens[0], "http") {
-			tokens = append([]string{"add"}, tokens...)
-		}
+	// Normalize command: lowercase and strip leading "/"
+	command := strings.ToLower(tokens[0])
+	command = strings.TrimPrefix(command, "/")
 
-		// Normalize command: lowercase and strip leading "/"
-		command := strings.ToLower(tokens[0])
-		command = strings.TrimPrefix(command, "/")
-
-		if handler, ok := b.commands[command]; ok {
-			go handler(update, tokens[1:])
-		} else if command == "" {
-			go b.receiveTorrent(update)
-		} else {
-			go b.Send("No such command, try /help", update.Message.Chat.ID, false)
-		}
+	if handler, ok := b.commands[command]; ok {
+		go handler(ctx, update, tokens[1:])
+	} else if command == "" {
+		go b.receiveTorrent(ctx, update)
+	} else {
+		go b.Send(ctx, "No such command, try /help", update.Message.Chat.ID, false)
 	}
 }
 

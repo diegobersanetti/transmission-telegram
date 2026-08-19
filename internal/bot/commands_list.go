@@ -2,21 +2,22 @@ package bot
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/dustin/go-humanize"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
+	"github.com/go-telegram/bot/models"
 )
 
 // list takes an optional argument which is a query to match against trackers
 // to list only torrents that has a tracker that matches.
-func (b *Bot) list(ud tgbotapi.Update, args []string) {
+func (b *Bot) list(ctx context.Context, ud *models.Update, args []string) {
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*list:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*list:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -26,7 +27,7 @@ func (b *Bot) list(ud tgbotapi.Update, args []string) {
 		// (?i) for case insensitivity
 		regx, err := regexp.Compile("(?i)" + regexp.QuoteMeta(args[0]))
 		if err != nil {
-			b.Send("*list:* "+err.Error(), ud.Message.Chat.ID, false)
+			b.Send(ctx, "*list:* "+err.Error(), ud.Message.Chat.ID, false)
 			return
 		}
 
@@ -44,18 +45,18 @@ func (b *Bot) list(ud tgbotapi.Update, args []string) {
 	if buf.Len() == 0 {
 		// if we got a tracker query show different message
 		if len(args) != 0 {
-			b.Send(fmt.Sprintf("*list:* No tracker matches: *%s*", args[0]), ud.Message.Chat.ID, true)
+			b.Send(ctx, fmt.Sprintf("*list:* No tracker matches: *%s*", args[0]), ud.Message.Chat.ID, true)
 			return
 		}
-		b.Send("*list:* no torrents", ud.Message.Chat.ID, false)
+		b.Send(ctx, "*list:* no torrents", ud.Message.Chat.ID, false)
 		return
 	}
 
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // head will list the first 5 or n torrents
-func (b *Bot) head(ud tgbotapi.Update, args []string) {
+func (b *Bot) head(ctx context.Context, ud *models.Update, args []string) {
 	var (
 		n   = 5 // default to 5
 		err error
@@ -64,14 +65,14 @@ func (b *Bot) head(ud tgbotapi.Update, args []string) {
 	if len(args) > 0 {
 		n, err = strconv.Atoi(args[0])
 		if err != nil {
-			b.Send("*head:* argument must be a number", ud.Message.Chat.ID, false)
+			b.Send(ctx, "*head:* argument must be a number", ud.Message.Chat.ID, false)
 			return
 		}
 	}
 
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*head:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*head:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -90,13 +91,13 @@ func (b *Bot) head(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("*head:* no torrents", ud.Message.Chat.ID, false)
+		b.Send(ctx, "*head:* no torrents", ud.Message.Chat.ID, false)
 		return
 	}
 
-	msgID := b.Send(buf.String(), ud.Message.Chat.ID, true)
+	msgID := b.Send(ctx, buf.String(), ud.Message.Chat.ID, true)
 
-	b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		buf.Reset()
 		torrents, err = b.Client.GetTorrents()
 		if err != nil {
@@ -121,7 +122,7 @@ func (b *Bot) head(ud tgbotapi.Update, args []string) {
 }
 
 // tail lists the last 5 or n torrents
-func (b *Bot) tail(ud tgbotapi.Update, args []string) {
+func (b *Bot) tail(ctx context.Context, ud *models.Update, args []string) {
 	var (
 		n   = 5 // default to 5
 		err error
@@ -130,14 +131,14 @@ func (b *Bot) tail(ud tgbotapi.Update, args []string) {
 	if len(args) > 0 {
 		n, err = strconv.Atoi(args[0])
 		if err != nil {
-			b.Send("*tail:* argument must be a number", ud.Message.Chat.ID, false)
+			b.Send(ctx, "*tail:* argument must be a number", ud.Message.Chat.ID, false)
 			return
 		}
 	}
 
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*tail:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*tail:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -156,13 +157,13 @@ func (b *Bot) tail(ud tgbotapi.Update, args []string) {
 	}
 
 	if buf.Len() == 0 {
-		b.Send("*tail:* no torrents", ud.Message.Chat.ID, false)
+		b.Send(ctx, "*tail:* no torrents", ud.Message.Chat.ID, false)
 		return
 	}
 
-	msgID := b.Send(buf.String(), ud.Message.Chat.ID, true)
+	msgID := b.Send(ctx, buf.String(), ud.Message.Chat.ID, true)
 
-	b.liveUpdate(ud.Message.Chat.ID, msgID, func() string {
+	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		buf.Reset()
 		torrents, err = b.Client.GetTorrents()
 		if err != nil {
@@ -186,7 +187,7 @@ func (b *Bot) tail(ud tgbotapi.Update, args []string) {
 }
 
 // latest takes n and returns the latest n torrents
-func (b *Bot) latest(ud tgbotapi.Update, args []string) {
+func (b *Bot) latest(ctx context.Context, ud *models.Update, args []string) {
 	var (
 		n   = 5 // default to 5
 		err error
@@ -195,14 +196,14 @@ func (b *Bot) latest(ud tgbotapi.Update, args []string) {
 	if len(args) > 0 {
 		n, err = strconv.Atoi(args[0])
 		if err != nil {
-			b.Send("*latest:* argument must be a number", ud.Message.Chat.ID, false)
+			b.Send(ctx, "*latest:* argument must be a number", ud.Message.Chat.ID, false)
 			return
 		}
 	}
 
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*latest:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*latest:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -219,17 +220,17 @@ func (b *Bot) latest(ud tgbotapi.Update, args []string) {
 		buf.WriteString(fmt.Sprintf("<%d> %s\n", torrents[i].ID, torrents[i].Name))
 	}
 	if buf.Len() == 0 {
-		b.Send("*latest:* No torrents", ud.Message.Chat.ID, false)
+		b.Send(ctx, "*latest:* No torrents", ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }
 
 // search takes a query and returns torrents with match
-func (b *Bot) search(ud tgbotapi.Update, args []string) {
+func (b *Bot) search(ctx context.Context, ud *models.Update, args []string) {
 	// make sure that we got a query
 	if len(args) == 0 {
-		b.Send("*search:* needs an argument", ud.Message.Chat.ID, false)
+		b.Send(ctx, "*search:* needs an argument", ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -237,13 +238,13 @@ func (b *Bot) search(ud tgbotapi.Update, args []string) {
 	// "(?i)" for case insensitivity
 	regx, err := regexp.Compile("(?i)" + regexp.QuoteMeta(query))
 	if err != nil {
-		b.Send("*search:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*search:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
 	torrents, err := b.Client.GetTorrents()
 	if err != nil {
-		b.Send("*search:* "+err.Error(), ud.Message.Chat.ID, false)
+		b.Send(ctx, "*search:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -254,8 +255,8 @@ func (b *Bot) search(ud tgbotapi.Update, args []string) {
 		}
 	}
 	if buf.Len() == 0 {
-		b.Send("No matches!", ud.Message.Chat.ID, false)
+		b.Send(ctx, "No matches!", ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send(buf.String(), ud.Message.Chat.ID, false)
+	b.Send(ctx, buf.String(), ud.Message.Chat.ID, false)
 }

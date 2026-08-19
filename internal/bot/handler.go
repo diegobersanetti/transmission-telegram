@@ -1,10 +1,11 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission-telegram/internal/config"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
 // registerCommands builds the command dispatch map.
@@ -42,10 +43,10 @@ func (b *Bot) registerCommands() {
 	}
 }
 
-func (b *Bot) help(ud tgbotapi.Update, args []string) {
-	b.Send(config.HELP, ud.Message.Chat.ID, true)
+func (b *Bot) help(ctx context.Context, ud *models.Update, args []string) {
+	b.Send(ctx, config.HELP, ud.Message.Chat.ID, true)
 }
 
-func (b *Bot) version(ud tgbotapi.Update, args []string) {
-	b.Send(fmt.Sprintf("Transmission *%s*\nTransmission-telegram *%s*", b.Client.Version(), config.VERSION), ud.Message.Chat.ID, true)
+func (b *Bot) version(ctx context.Context, ud *models.Update, args []string) {
+	b.Send(ctx, fmt.Sprintf("Transmission *%s*\nTransmission-telegram *%s*", b.Client.Version(), config.VERSION), ud.Message.Chat.ID, true)
 }
