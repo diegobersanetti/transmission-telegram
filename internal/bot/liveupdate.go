@@ -9,9 +9,12 @@ import (
 )
 
 // liveUpdate repeatedly edits a sent message with fresh data.
-// updateFn is called each iteration and should return the new message text ("" to skip).
-// finalFn is called once after the loop for a "done" state display (nil to skip entirely).
 func (b *Bot) liveUpdate(ctx context.Context, chatID int64, msgID int, updateFn func() string, finalFn func() string) {
+	b.liveUpdateWithKeyboard(ctx, chatID, msgID, updateFn, finalFn, nil)
+}
+
+// liveUpdateWithKeyboard repeatedly edits a sent message with fresh data and preserves/updates an inline keyboard.
+func (b *Bot) liveUpdateWithKeyboard(ctx context.Context, chatID int64, msgID int, updateFn func() string, finalFn func() string, markup models.ReplyMarkup) {
 	if b.Config.NoLive {
 		return
 	}
@@ -28,10 +31,11 @@ func (b *Bot) liveUpdate(ctx context.Context, chatID int64, msgID int, updateFn 
 
 		if text := updateFn(); text != "" {
 			b.API.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    chatID,
-				MessageID: msgID,
-				Text:      text,
-				ParseMode: models.ParseModeMarkdownV1,
+				ChatID:      chatID,
+				MessageID:   msgID,
+				Text:        text,
+				ParseMode:   models.ParseModeMarkdownV1,
+				ReplyMarkup: markup,
 			})
 		}
 	}
@@ -45,10 +49,11 @@ func (b *Bot) liveUpdate(ctx context.Context, chatID int64, msgID int, updateFn 
 
 		if text := finalFn(); text != "" {
 			b.API.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:    chatID,
-				MessageID: msgID,
-				Text:      text,
-				ParseMode: models.ParseModeMarkdownV1,
+				ChatID:      chatID,
+				MessageID:   msgID,
+				Text:        text,
+				ParseMode:   models.ParseModeMarkdownV1,
+				ReplyMarkup: markup,
 			})
 		}
 	}

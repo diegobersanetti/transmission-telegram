@@ -2,8 +2,10 @@ package bot
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -116,6 +118,11 @@ func normalizeCommand(token string) (cmd string, isLink bool) {
 
 // handleUpdate processes incoming updates from Telegram.
 func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Update) {
+	if update.CallbackQuery != nil {
+		go b.handleCallbackQuery(ctx, update.CallbackQuery)
+		return
+	}
+
 	if update.Message == nil {
 		return
 	}
@@ -163,6 +170,70 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 	} else {
 		go b.Send(ctx, "No such command, try /help", update.Message.Chat.ID, false)
 	}
+}
+
+// handleCallbackQuery processes button clicks from inline keyboards.
+func (b *Bot) handleCallbackQuery(ctx context.Context, cb *models.CallbackQuery) {
+	username := cb.From.Username
+	userID := cb.From.ID
+
+	if !b.Config.Masters.Contains(username, userID) {
+		b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+			CallbackQueryID: cb.ID,
+			Text:            "Unauthorized",
+			ShowAlert:       true,
+		})
+		return
+	}
+
+	// Expected callback format: cmd:<action>:<id>
+	parts := strings.Split(cb.Data, ":")
+	if len(parts) != 3 || parts[0] != "cmd" {
+		b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+			CallbackQueryID: cb.ID,
+		})
+		return
+	}
+
+	action := parts[1]
+	torrentID, err := strconv.Atoi(parts[2])
+	if err != nil {
+		b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+			CallbackQueryID: cb.ID,
+			Text:            "Invalid torrent ID",
+		})
+		return
+	}
+
+	var answerText string
+	switch action {
+	case "stop":
+		status, err := b.Client.StopTorrent(torrentID)
+		if err != nil {
+			answerText = "Error stopping: " + err.Error()
+		} else {
+			answerText = fmt.Sprintf("[%s] Torrent paused", status)
+		}
+	case "start":
+		status, err := b.Client.StartTorrent(torrentID)
+		if err != nil {
+			answerText = "Error resuming: " + err.Error()
+		} else {
+			answerText = fmt.Sprintf("[%s] Torrent resumed", status)
+		}
+	case "del":
+		name, err := b.Client.DeleteTorrent(torrentID, false)
+		if err != nil {
+			answerText = "Error deleting: " + err.Error()
+		} else {
+			answerText = "Deleted: " + name
+		}
+	}
+
+	b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: cb.ID,
+		Text:            answerText,
+	})
 }
 
 // ChatID returns the current chat ID atomically (used by the notify package).

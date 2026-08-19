@@ -133,3 +133,21 @@ func TestDefaultBotCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestInfoKeyboard(t *testing.T) {
+	kb := infoKeyboard(42)
+	if kb == nil || len(kb.InlineKeyboard) != 1 || len(kb.InlineKeyboard[0]) != 3 {
+		t.Fatalf("expected 1 row of 3 buttons, got %v", kb)
+	}
+
+	buttons := kb.InlineKeyboard[0]
+	if buttons[0].CallbackData != "cmd:stop:42" {
+		t.Errorf("expected cmd:stop:42, got %q", buttons[0].CallbackData)
+	}
+	if buttons[1].CallbackData != "cmd:start:42" {
+		t.Errorf("expected cmd:start:42, got %q", buttons[1].CallbackData)
+	}
+	if buttons[2].CallbackData != "cmd:del:42" {
+		t.Errorf("expected cmd:del:42, got %q", buttons[2].CallbackData)
+	}
+}

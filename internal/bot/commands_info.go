@@ -42,6 +42,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 		}
 
 		// format the info
+		// format the info
 		torrentName := b.mdReplacer.Replace(torrent.Name) // escape markdown
 		info := fmt.Sprintf("`<%d>` *%s*\n%s %s *%.1f%%* (%s / %s) ↓ *%s*  ↑ *%s* R: *%s*\nDL: *%s* UP: *%s*\nAdded: *%s*, ETA: *%s*\nTrackers: `%s`",
 			torrent.ID, torrentName, progressBar(torrent.PercentDone, 10), torrent.TorrentStatus(),
@@ -50,12 +51,14 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 			humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver), time.Unix(torrent.AddedDate, 0).Format(time.Stamp),
 			torrent.ETA(), trackers)
 
+		keyboard := infoKeyboard(torrent.ID)
+
 		// send it
-		msgID := b.Send(ctx, info, ud.Message.Chat.ID, true)
+		msgID := b.SendWithKeyboard(ctx, info, ud.Message.Chat.ID, true, keyboard)
 
 		// this go-routine will make the info live for 'duration * interval'
 		go func(torrentID, msgID int, trackers string) {
-			b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
+			b.liveUpdateWithKeyboard(ctx, ud.Message.Chat.ID, msgID, func() string {
 				torrent, err := b.Client.GetTorrent(torrentID)
 				if err != nil {
 					return "" // skip this iteration if there's an error
@@ -80,8 +83,21 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 					torrent.PercentDone*100, humanize.Bytes(torrent.Have()), humanize.Bytes(torrent.SizeWhenDone),
 					torrent.Ratio(), humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver),
 					time.Unix(torrent.AddedDate, 0).Format(time.Stamp), trackers)
-			})
+			}, keyboard)
 		}(torrentID, msgID, trackers)
+	}
+}
+
+// infoKeyboard returns inline action buttons for controlling a torrent.
+func infoKeyboard(torrentID int) *models.InlineKeyboardMarkup {
+	return &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{
+			{
+				{Text: "⏸ Pause", CallbackData: fmt.Sprintf("cmd:stop:%d", torrentID)},
+				{Text: "▶ Resume", CallbackData: fmt.Sprintf("cmd:start:%d", torrentID)},
+				{Text: "🗑 Delete", CallbackData: fmt.Sprintf("cmd:del:%d", torrentID)},
+			},
+		},
 	}
 }
 

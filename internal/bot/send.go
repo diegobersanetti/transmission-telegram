@@ -51,6 +51,11 @@ func splitMessage(text string, maxChars int) []string {
 // Send sends a message to a chat, splitting long messages safely.
 // Returns the message ID of the last sent message.
 func (b *Bot) Send(ctx context.Context, text string, chatID int64, markdown bool) int {
+	return b.SendWithKeyboard(ctx, text, chatID, markdown, nil)
+}
+
+// SendWithKeyboard sends a message with an optional inline keyboard markup.
+func (b *Bot) SendWithKeyboard(ctx context.Context, text string, chatID int64, markdown bool, markup models.ReplyMarkup) int {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -69,15 +74,20 @@ func (b *Bot) Send(ctx context.Context, text string, chatID int64, markdown bool
 	chunks := splitMessage(text, 4096)
 	var lastMsgID int
 
-	for _, chunk := range chunks {
-		resp, err := b.API.SendMessage(ctx, &tgbot.SendMessageParams{
+	for i, chunk := range chunks {
+		params := &tgbot.SendMessageParams{
 			ChatID:    chatID,
 			Text:      chunk,
 			ParseMode: parseMode,
 			LinkPreviewOptions: &models.LinkPreviewOptions{
 				IsDisabled: tgbot.True(),
 			},
-		})
+		}
+		if i == len(chunks)-1 && markup != nil {
+			params.ReplyMarkup = markup
+		}
+
+		resp, err := b.API.SendMessage(ctx, params)
 		if err != nil {
 			b.Logger.Printf("[ERROR] Send: %s", err)
 			continue
