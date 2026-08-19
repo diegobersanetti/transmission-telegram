@@ -91,16 +91,18 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 	}
 
 	username := ""
+	var userID int64
 	if update.Message.From != nil {
 		username = update.Message.From.Username
+		userID = update.Message.From.ID
 	}
 
-	if !b.Config.Masters.Contains(username) {
+	if !b.Config.Masters.Contains(username, userID) {
 		fromStr := username
 		if fromStr == "" && update.Message.From != nil {
 			fromStr = update.Message.From.FirstName
 		}
-		b.Logger.Printf("[INFO] Ignored a message from: %s", fromStr)
+		b.Logger.Printf("[INFO] Ignored a message from: %s (ID: %d)", fromStr, userID)
 		return
 	}
 

@@ -16,30 +16,41 @@ func TestMasterSlice(t *testing.T) {
 	if err := masters.Set("@Pyed"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if err := masters.Set("987654321"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Test Contains (case-insensitivity and @ handling)
-	if !masters.Contains("sheriff") {
-		t.Errorf("expected Contains('sheriff') to be true")
+	if !masters.Contains("sheriff", 0) {
+		t.Errorf("expected Contains('sheriff', 0) to be true")
 	}
-	if !masters.Contains("SHERIFF") {
-		t.Errorf("expected Contains('SHERIFF') to be true")
+	if !masters.Contains("SHERIFF", 0) {
+		t.Errorf("expected Contains('SHERIFF', 0) to be true")
 	}
-	if !masters.Contains("@sheriff") {
-		t.Errorf("expected Contains('@sheriff') to be true")
+	if !masters.Contains("@sheriff", 0) {
+		t.Errorf("expected Contains('@sheriff', 0) to be true")
 	}
-	if !masters.Contains("pyed") {
-		t.Errorf("expected Contains('pyed') to be true")
+	if !masters.Contains("pyed", 0) {
+		t.Errorf("expected Contains('pyed', 0) to be true")
 	}
-	if !masters.Contains("@Pyed") {
-		t.Errorf("expected Contains('@Pyed') to be true")
+	if !masters.Contains("@Pyed", 0) {
+		t.Errorf("expected Contains('@Pyed', 0) to be true")
 	}
-	if masters.Contains("other_user") {
-		t.Errorf("expected Contains('other_user') to be false")
+	// Test numeric User ID matching
+	if !masters.Contains("", 987654321) {
+		t.Errorf("expected Contains('', 987654321) to be true")
+	}
+	if !masters.Contains("any_username", 987654321) {
+		t.Errorf("expected Contains('any_username', 987654321) to be true")
+	}
+	// Non-matching
+	if masters.Contains("other_user", 111) {
+		t.Errorf("expected Contains('other_user', 111) to be false")
 	}
 
 	// Test String
 	str := masters.String()
-	if !strings.Contains(str, "sheriff") || !strings.Contains(str, "@pyed") {
+	if !strings.Contains(str, "sheriff") || !strings.Contains(str, "@pyed") || !strings.Contains(str, "987654321") {
 		t.Errorf("unexpected String output: %s", str)
 	}
 }

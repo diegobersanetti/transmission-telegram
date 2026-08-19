@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -114,10 +115,16 @@ func (masters *MasterSlice) Set(master string) error {
 	return nil
 }
 
-func (masters MasterSlice) Contains(username string) bool {
-	username = strings.ToLower(strings.TrimPrefix(username, "@"))
+func (masters MasterSlice) Contains(username string, userID int64) bool {
+	cleanUsername := strings.ToLower(strings.TrimPrefix(username, "@"))
+	userIDStr := strconv.FormatInt(userID, 10)
+
 	for _, master := range masters {
-		if strings.TrimPrefix(master, "@") == username {
+		cleanMaster := strings.ToLower(strings.TrimPrefix(master, "@"))
+		if cleanUsername != "" && cleanMaster == cleanUsername {
+			return true
+		}
+		if userID > 0 && cleanMaster == userIDStr {
 			return true
 		}
 	}
@@ -139,7 +146,7 @@ type Config struct {
 
 func Parse() *Config {
 	flag.Usage = func() {
-		fmt.Fprint(os.Stderr, "Usage: transmission-telegram <-token=TOKEN> <-master=@tuser> [-master=@yuser2] [-url=http://] [-username=user] [-password=pass]\n\n")
+		fmt.Fprint(os.Stderr, "Usage: transmission-telegram <-token=TOKEN> <-master=@tuser|123456789> [-master=@yuser2] [-url=http://] [-username=user] [-password=pass]\n\n")
 		flag.PrintDefaults()
 	}
 
@@ -164,7 +171,7 @@ func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*C
 	}
 
 	fs.StringVar(&cfg.BotToken, "token", "", "Telegram bot token, Can be passed via environment variable 'TT_BOTT'")
-	fs.Var(&cfg.Masters, "master", "Your telegram handler, So the bot will only respond to you. Can specify more than one")
+	fs.Var(&cfg.Masters, "master", "Your telegram handler or numeric user ID, So the bot will only respond to you. Can specify more than one")
 	fs.StringVar(&cfg.RPCURL, "url", "http://localhost:9091/transmission/rpc", "Transmission RPC URL")
 	fs.StringVar(&cfg.Username, "username", "", "Transmission username")
 	fs.StringVar(&cfg.Password, "password", "", "Transmission password")
