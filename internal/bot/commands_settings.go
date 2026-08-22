@@ -12,13 +12,16 @@ import (
 	"github.com/pyed/transmission"
 )
 
+// sortUsage is the usage message for the /sort command.
+const sortUsage = `*sort* takes one of:
+			(*id, name, age, size, progress, downspeed, upspeed, download, upload, ratio*)
+			optionally start with (*rev*) for reversed order
+			e.g. "*sort rev size*" to get biggest torrents first.`
+
 // sort changes torrents sorting
 func (b *Bot) sort(ctx context.Context, ud *models.Update, args []string) {
 	if len(args) == 0 {
-		b.Send(ctx, `*sort* takes one of:
-			(*id, name, age, size, progress, downspeed, upspeed, download, upload, ratio*)
-			optionally start with (*rev*) for reversed order
-			e.g. "*sort rev size*" to get biggest torrents first.`, ud.Message.Chat.ID, true)
+		b.Send(ctx, sortUsage, ud.Message.Chat.ID, true)
 		return
 	}
 
@@ -26,6 +29,12 @@ func (b *Bot) sort(ctx context.Context, ud *models.Update, args []string) {
 	if strings.ToLower(args[0]) == "rev" {
 		reversed = true
 		args = args[1:]
+		// "/sort rev" without a key: used to panic on args[0] below,
+		// crashing the whole process. Reply with usage instead.
+		if len(args) == 0 {
+			b.Send(ctx, sortUsage, ud.Message.Chat.ID, true)
+			return
+		}
 	}
 
 	switch strings.ToLower(args[0]) {

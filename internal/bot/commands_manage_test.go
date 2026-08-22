@@ -1,0 +1,158 @@
+package bot
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/go-telegram/bot/models"
+	"github.com/pyed/transmission"
+)
+
+// fakeTorrent is a small fake .torrent payload (not a real torrent).
+var fakeTorrent = []byte("d8:announce19:http://tracker.example/4:infod6:lengthi123456ee")
+
+// fakeTransmission is a minimal in-process Transmission RPC server.
+type fakeTransmission struct {
+	*httptest.Server
+	mu        sync.Mutex
+	addBodies []string
+}
+
+// newFakeTransmission starts a fake Transmission RPC server that records
+// torrent-add request bodies.
+func newFakeTransmission(t *testing.T) *fakeTransmission {
+	t.Helper()
+	f := &fakeTransmission{}
+	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Method string `json:"method"`
+		}
+		_ = json.Unmarshal(body, &req)
+
+		w.Header().Set("Content-Type", "application/json")
+		switch req.Method {
+		case "session-get":
+			_, _ = w.Write([]byte(`{"result":"success","arguments":{"version":"test"}}`))
+		case "torrent-add":
+			f.mu.Lock()
+			f.addBodies = append(f.addBodies, string(body))
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"result":"success","arguments":{"torrent-added":{"id":7,"name":"Test Torrent","hashString":"abc123"}}}`))
+		default:
+			_, _ = w.Write([]byte(`{"result":"success","arguments":{}}`))
+		}
+	}))
+	t.Cleanup(f.Close)
+	return f
+}
+
+// addRequests returns the raw bodies of all torrent-add requests.
+func (f *fakeTransmission) addRequests() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.addBodies...)
+}
+
+// TestReceiveTorrentDoesNotLeakToken verifies that an uploaded .torrent is
+// downloaded by the bot and sent to Transmission as raw metainfo, so the
+// bot token embedded in the Telegram file URL never reaches Transmission.
+func TestReceiveTorrentDoesNotLeakToken(t *testing.T) {
+	ft := newFakeTelegram(t)
+	ft.fileBytes = fakeTorrent
+
+	fts := newFakeTransmission(t)
+	client, err := transmission.New(fts.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatalf("failed to create transmission client: %v", err)
+	}
+
+	b := newTestBot(t, ft.newBot(t), client)
+
+	ud := &models.Update{
+		Message: &models.Message{
+			Chat:     models.Chat{ID: 42},
+			Document: &models.Document{FileID: "test-file-id", FileName: "upload.torrent"},
+		},
+	}
+
+	b.receiveTorrent(context.Background(), ud)
+
+	// 1. Transmission must have received exactly one torrent-add.
+	adds := fts.addRequests()
+	if len(adds) != 1 {
+		t.Fatalf("expected 1 torrent-add request, got %d", len(adds))
+	}
+	body := adds[0]
+
+	// 2. The torrent bytes must be present as base64 metainfo.
+	wantMeta := base64.StdEncoding.EncodeToString(fakeTorrent)
+	if !strings.Contains(body, `"metainfo":"`+wantMeta+`"`) {
+		t.Errorf("torrent-add body does not contain expected metainfo %q:\n%s", wantMeta, body)
+	}
+
+	// 3. The bot token and the Telegram file URL must not leak.
+	if strings.Contains(body, testBotToken) {
+		t.Errorf("bot token leaked to Transmission:\n%s", body)
+	}
+	if strings.Contains(body, ft.Server.URL) {
+		t.Errorf("Telegram file URL leaked to Transmission:\n%s", body)
+	}
+
+	// 4. The user should be told the torrent was added.
+	texts := ft.sentTexts()
+	if len(texts) == 0 || !strings.Contains(texts[len(texts)-1], "Test Torrent") {
+		t.Errorf("expected final message about the added torrent, got %v", texts)
+	}
+}
+
+// TestDownloadTelegramFile verifies the helper used by receiveTorrent.
+func TestDownloadTelegramFile(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, "hello torrent")
+		}))
+		t.Cleanup(srv.Close)
+
+		data, err := downloadTelegramFile(context.Background(), srv.URL)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(data) != "hello torrent" {
+			t.Errorf("unexpected data %q", data)
+		}
+	})
+
+	t.Run("non-200", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "nope", http.StatusNotFound)
+		}))
+		t.Cleanup(srv.Close)
+
+		if _, err := downloadTelegramFile(context.Background(), srv.URL); err == nil {
+			t.Error("expected an error for a non-200 response")
+		}
+	})
+
+	t.Run("oversize", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, strings.Repeat("a", maxTorrentDownloadSize+1))
+		}))
+		t.Cleanup(srv.Close)
+
+		data, err := downloadTelegramFile(context.Background(), srv.URL)
+		if err == nil {
+			t.Fatalf("expected an error for an oversize response, got %d bytes", len(data))
+		}
+		if !strings.Contains(err.Error(), "exceeds maximum size") {
+			t.Errorf("unexpected error %q", err)
+		}
+	})
+}

@@ -3,7 +3,10 @@ package bot
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	tgbot "github.com/go-telegram/bot"
@@ -58,8 +61,62 @@ func (b *Bot) receiveTorrent(ctx context.Context, ud *models.Update) {
 		return
 	}
 
-	// add by file URL
-	b.add(ctx, ud, []string{b.API.FileDownloadLink(file)})
+	// Download the file in this process and add it by raw metainfo. The
+	// Telegram file URL contains the bot token, so it must never be handed
+	// to Transmission; downloading in-process keeps that credential from
+	// being disclosed to Transmission.
+	data, err := downloadTelegramFile(ctx, b.API.FileDownloadLink(file))
+	if err != nil {
+		b.Send(ctx, "*receiver:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+
+	torrent, err := b.Client.AddTorrentByData(ctx, data)
+	if err != nil {
+		b.Send(ctx, "*receiver:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+	if torrent == nil || torrent.Name == "" {
+		b.Send(ctx, "*receiver:* error adding torrent", ud.Message.Chat.ID, false)
+		return
+	}
+
+	b.Send(ctx, fmt.Sprintf("*Added:* `<%d>` %s", torrent.ID, b.mdReplacer.Replace(torrent.Name)), ud.Message.Chat.ID, true)
+}
+
+// maxTorrentDownloadSize is the largest .torrent file we will download from
+// Telegram; real .torrent files are small, so anything bigger is rejected.
+const maxTorrentDownloadSize = 10 << 20 // 10 MiB
+
+// torrentDownloadClient has an explicit timeout for Telegram file downloads;
+// the passed context can still cancel the download earlier.
+var torrentDownloadClient = &http.Client{Timeout: 60 * time.Second}
+
+// downloadTelegramFile downloads a Telegram file by URL. The URL contains the
+// bot token, so it must only ever be requested from this process.
+func downloadTelegramFile(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := torrentDownloadClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status %s", resp.Status)
+	}
+	// Read at most maxTorrentDownloadSize+1 bytes so an oversize response is
+	// detected without buffering it unboundedly.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxTorrentDownloadSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxTorrentDownloadSize {
+		return nil, fmt.Errorf("file exceeds maximum size of %d bytes", maxTorrentDownloadSize)
+	}
+	return data, nil
 }
 
 // del takes an id or more, and delete the corresponding torrent/s
