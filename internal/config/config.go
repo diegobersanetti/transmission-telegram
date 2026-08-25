@@ -120,6 +120,10 @@ func (masters *MasterSlice) String() string {
 }
 
 func (masters *MasterSlice) Set(master string) error {
+	master = strings.TrimSpace(master)
+	if strings.Trim(master, "@") == "" {
+		return errors.New("master cannot be empty")
+	}
 	*masters = append(*masters, strings.ToLower(master))
 	return nil
 }
@@ -178,10 +182,18 @@ func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*C
 		Interval: 5 * time.Second,
 		Duration: 10,
 	}
+	tokenDefault := strings.TrimSpace(getenv("TT_BOT_TOKEN"))
+	if tokenDefault == "" {
+		tokenDefault = strings.TrimSpace(getenv("TT_BOTT"))
+	}
+	rpcURLDefault := strings.TrimSpace(getenv("TR_URL"))
+	if rpcURLDefault == "" {
+		rpcURLDefault = "http://localhost:9091/transmission/rpc"
+	}
 
-	fs.StringVar(&cfg.BotToken, "token", "", "Telegram bot token, Can be passed via environment variable 'TT_BOTT'")
-	fs.Var(&cfg.Masters, "master", "Your telegram handler or numeric user ID, So the bot will only respond to you. Can specify more than one")
-	fs.StringVar(&cfg.RPCURL, "url", "http://localhost:9091/transmission/rpc", "Transmission RPC URL")
+	fs.StringVar(&cfg.BotToken, "token", tokenDefault, "Telegram bot token (env: TT_BOT_TOKEN or legacy TT_BOTT)")
+	fs.Var(&cfg.Masters, "master", "Telegram username or numeric user ID allowed to use the bot; repeatable")
+	fs.StringVar(&cfg.RPCURL, "url", rpcURLDefault, "Transmission RPC URL (env: TR_URL)")
 	fs.StringVar(&cfg.Username, "username", "", "Transmission username")
 	fs.StringVar(&cfg.Password, "password", "", "Transmission password")
 	fs.StringVar(&cfg.LogFile, "logfile", "", "Send logs to a file")
@@ -192,18 +204,17 @@ func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*C
 		return nil, err
 	}
 
+	cfg.BotToken = strings.TrimSpace(cfg.BotToken)
+	cfg.RPCURL = strings.TrimSpace(cfg.RPCURL)
 	if cfg.BotToken == "" {
-		if token := getenv("TT_BOTT"); len(token) > 1 {
-			cfg.BotToken = token
-		}
+		return nil, errors.New("Telegram bot token is required (-token or TT_BOT_TOKEN)")
 	}
-
-	if cfg.BotToken == "" || len(cfg.Masters) < 1 {
-		return nil, errors.New("mandatory argument missing! (-token or -master)")
+	if len(cfg.Masters) < 1 {
+		return nil, errors.New("at least one authorized user is required (-master)")
 	}
 
 	for i := range cfg.Masters {
-		cfg.Masters[i] = strings.Replace(cfg.Masters[i], "@", "", -1)
+		cfg.Masters[i] = strings.TrimPrefix(strings.TrimSpace(cfg.Masters[i]), "@")
 	}
 
 	if cfg.Username == "" {

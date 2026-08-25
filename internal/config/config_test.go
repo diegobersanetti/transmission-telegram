@@ -99,6 +99,7 @@ func TestParseFlags_EnvVars(t *testing.T) {
 	env := map[string]string{
 		"TT_BOTT": "env-token-123",
 		"TR_AUTH": "user:pass:with:colons",
+		"TR_URL":  "http://transmission:9091/transmission/rpc",
 	}
 	getenv := func(key string) string {
 		return env[key]
@@ -117,6 +118,54 @@ func TestParseFlags_EnvVars(t *testing.T) {
 	}
 	if cfg.Username != "user" || cfg.Password != "pass:with:colons" {
 		t.Errorf("expected password with colons preserved, got %q / %q", cfg.Username, cfg.Password)
+	}
+	if cfg.RPCURL != "http://transmission:9091/transmission/rpc" {
+		t.Errorf("expected RPCURL from TR_URL, got %q", cfg.RPCURL)
+	}
+}
+
+func TestParseFlags_FlagsOverrideEnvironment(t *testing.T) {
+	env := map[string]string{
+		"TT_BOT_TOKEN": "environment-token",
+		"TT_BOTT":      "legacy-token",
+		"TR_URL":       "http://environment/transmission/rpc",
+	}
+	getenv := func(key string) string { return env[key] }
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+
+	cfg, err := ParseFlags(fs, []string{
+		"-token=flag-token",
+		"-master=12345",
+		"-url=http://flag/transmission/rpc",
+	}, getenv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BotToken != "flag-token" || cfg.RPCURL != "http://flag/transmission/rpc" {
+		t.Fatalf("flags did not override environment: token=%q url=%q", cfg.BotToken, cfg.RPCURL)
+	}
+}
+
+func TestParseFlags_PrefersStandardTokenEnvironment(t *testing.T) {
+	env := map[string]string{
+		"TT_BOT_TOKEN": "standard-token",
+		"TT_BOTT":      "legacy-token",
+	}
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cfg, err := ParseFlags(fs, []string{"-master=12345"}, func(key string) string { return env[key] })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BotToken != "standard-token" {
+		t.Fatalf("expected standard token environment variable, got %q", cfg.BotToken)
+	}
+}
+
+func TestParseFlags_RejectsEmptyMaster(t *testing.T) {
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	_, err := ParseFlags(fs, []string{"-token=test-token", "-master=@"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "master cannot be empty") {
+		t.Fatalf("expected empty master error, got %v", err)
 	}
 }
 
