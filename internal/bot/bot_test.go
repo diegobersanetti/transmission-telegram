@@ -144,6 +144,22 @@ func TestDefaultBotCommands(t *testing.T) {
 			t.Errorf("menu command %q is not registered in bot handlers", c.Command)
 		}
 	}
+
+	expectedPrimary := []string{
+		"list", "head", "tail", "active", "downs", "seeding", "paused", "checking", "errors",
+		"latest", "search", "info", "add", "stop", "start", "check", "del", "deldata",
+		"speed", "stats", "free", "turtle", "reannounce", "downlimit", "uplimit",
+		"downloaddir", "sort", "trackers", "count", "help", "version",
+	}
+	menu := make(map[string]bool, len(cmds))
+	for _, command := range cmds {
+		menu[command.Command] = true
+	}
+	for _, command := range expectedPrimary {
+		if !menu[command] {
+			t.Errorf("primary command %q is missing from the Telegram menu", command)
+		}
+	}
 }
 
 func TestInfoKeyboard(t *testing.T) {
