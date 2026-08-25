@@ -301,3 +301,19 @@ func TestRecoverMiddlewareContainsHandlerPanic(t *testing.T) {
 		t.Fatalf("expected recovered panic to be logged, got %q", logOutput)
 	}
 }
+
+func TestRecoverMiddlewareContainsHandlerPanicWithNilUpdate(t *testing.T) {
+	var logs bytes.Buffer
+	b := &Bot{Logger: slog.New(slog.NewTextHandler(&logs, nil))}
+	handler := b.recoverMiddleware(func(context.Context, *tgbot.Bot, *models.Update) {
+		panic("nil update")
+	})
+
+	handler(context.Background(), nil, nil)
+
+	logOutput := logs.String()
+	if !strings.Contains(logOutput, "Recovered from Telegram update panic") ||
+		!strings.Contains(logOutput, "update_id=0") {
+		t.Fatalf("expected nil-update panic to be contained, got %q", logOutput)
+	}
+}

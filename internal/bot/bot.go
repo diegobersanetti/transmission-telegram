@@ -151,6 +151,9 @@ func normalizeCommand(token string) (cmd string, isLink bool) {
 
 // handleUpdate processes incoming updates from Telegram.
 func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Update) {
+	if update == nil {
+		return
+	}
 	if update.CallbackQuery != nil {
 		b.handleCallbackQuery(ctx, update.CallbackQuery)
 		return
@@ -222,11 +225,15 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 
 func (b *Bot) recoverMiddleware(next tgbot.HandlerFunc) tgbot.HandlerFunc {
 	return func(ctx context.Context, api *tgbot.Bot, update *models.Update) {
+		var updateID int64
+		if update != nil {
+			updateID = update.ID
+		}
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				b.Logger.Error("Recovered from Telegram update panic",
 					"panic", recovered,
-					"update_id", update.ID,
+					"update_id", updateID,
 					"stack", string(debug.Stack()),
 				)
 			}
