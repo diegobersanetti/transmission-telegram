@@ -129,6 +129,7 @@ func TestParseFlags_FlagsOverrideEnvironment(t *testing.T) {
 		"TT_BOT_TOKEN": "environment-token",
 		"TT_BOTT":      "legacy-token",
 		"TR_URL":       "http://environment/transmission/rpc",
+		"TR_AUTH":      "environment-user:environment-password",
 	}
 	getenv := func(key string) string { return env[key] }
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -137,12 +138,58 @@ func TestParseFlags_FlagsOverrideEnvironment(t *testing.T) {
 		"-token=flag-token",
 		"-master=12345",
 		"-url=http://flag/transmission/rpc",
+		"-username=flag-user",
+		"-password=flag-password",
 	}, getenv)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.BotToken != "flag-token" || cfg.RPCURL != "http://flag/transmission/rpc" {
-		t.Fatalf("flags did not override environment: token=%q url=%q", cfg.BotToken, cfg.RPCURL)
+	if cfg.BotToken != "flag-token" || cfg.RPCURL != "http://flag/transmission/rpc" ||
+		cfg.Username != "flag-user" || cfg.Password != "flag-password" {
+		t.Fatalf("flags did not override environment: token=%q url=%q username=%q password=%q",
+			cfg.BotToken, cfg.RPCURL, cfg.Username, cfg.Password)
+	}
+}
+
+func TestParseFlags_CredentialFlagsOverrideIndependently(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		wantUsername string
+		wantPassword string
+	}{
+		{
+			name:         "username flag keeps environment password",
+			args:         []string{"-username=flag-user"},
+			wantUsername: "flag-user",
+			wantPassword: "environment-password",
+		},
+		{
+			name:         "password flag keeps environment username",
+			args:         []string{"-password=flag-password"},
+			wantUsername: "environment-user",
+			wantPassword: "flag-password",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			args := append([]string{"-token=test-token", "-master=12345"}, tt.args...)
+			cfg, err := ParseFlags(fs, args, func(key string) string {
+				if key == "TR_AUTH" {
+					return "environment-user:environment-password"
+				}
+				return ""
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.Username != tt.wantUsername || cfg.Password != tt.wantPassword {
+				t.Fatalf("credentials = %q / %q, want %q / %q",
+					cfg.Username, cfg.Password, tt.wantUsername, tt.wantPassword)
+			}
+		})
 	}
 }
 

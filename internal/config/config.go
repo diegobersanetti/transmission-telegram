@@ -202,12 +202,16 @@ func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*C
 	if rpcURLDefault == "" {
 		rpcURLDefault = "http://localhost:9091/transmission/rpc"
 	}
+	authUsernameDefault, authPasswordDefault := "", ""
+	if values := strings.SplitN(getenv("TR_AUTH"), ":", 2); len(values) == 2 {
+		authUsernameDefault, authPasswordDefault = values[0], values[1]
+	}
 
 	fs.StringVar(&cfg.BotToken, "token", tokenDefault, "Telegram bot token (env: TT_BOT_TOKEN or legacy TT_BOTT)")
 	fs.Var(&cfg.Masters, "master", "Telegram username or numeric user ID allowed to use the bot; repeatable")
 	fs.StringVar(&cfg.RPCURL, "url", rpcURLDefault, "Transmission RPC URL (env: TR_URL)")
-	fs.StringVar(&cfg.Username, "username", "", "Transmission username")
-	fs.StringVar(&cfg.Password, "password", "", "Transmission password")
+	fs.StringVar(&cfg.Username, "username", authUsernameDefault, "Transmission username (env: TR_AUTH user:password)")
+	fs.StringVar(&cfg.Password, "password", authPasswordDefault, "Transmission password (env: TR_AUTH user:password)")
 	fs.StringVar(&cfg.LogFile, "logfile", "", "Send logs to a file")
 	fs.StringVar(&cfg.TransLogFile, "transmission-logfile", "", "Open transmission logfile to monitor torrents completion")
 	fs.BoolVar(&cfg.NoLive, "no-live", false, "Don't edit and update info after sending")
@@ -227,12 +231,6 @@ func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*C
 
 	for i := range cfg.Masters {
 		cfg.Masters[i] = strings.TrimPrefix(strings.TrimSpace(cfg.Masters[i]), "@")
-	}
-
-	if cfg.Username == "" {
-		if values := strings.SplitN(getenv("TR_AUTH"), ":", 2); len(values) > 1 {
-			cfg.Username, cfg.Password = values[0], values[1]
-		}
 	}
 
 	return cfg, nil
