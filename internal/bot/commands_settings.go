@@ -151,7 +151,7 @@ func (b *Bot) downloaddir(ctx context.Context, ud *models.Update, args []string)
 		return
 	}
 
-	downloadDir := args[0]
+	downloadDir := strings.Join(args, " ")
 
 	if err := b.Client.SetDownloadDir(ctx, downloadDir); err != nil {
 		b.Send(ctx, "*downloaddir:* "+err.Error(), ud.Message.Chat.ID, false)
@@ -202,6 +202,25 @@ func (b *Bot) speedLimit(ctx context.Context, ud *models.Update, args []string, 
 
 // turtle toggles or sets alternative speed limits ("Turtle Mode")
 func (b *Bot) turtle(ctx context.Context, ud *models.Update, args []string) {
+	var requested *bool
+	if len(args) > 1 {
+		b.Send(ctx, "*turtle:* expected on or off", ud.Message.Chat.ID, false)
+		return
+	}
+	if len(args) == 1 {
+		var enabled bool
+		switch strings.ToLower(args[0]) {
+		case "on", "1", "true", "enable":
+			enabled = true
+		case "off", "0", "false", "disable":
+			enabled = false
+		default:
+			b.Send(ctx, "*turtle:* expected on or off", ud.Message.Chat.ID, false)
+			return
+		}
+		requested = &enabled
+	}
+
 	sess, err := b.Client.GetSession(ctx)
 	if err != nil {
 		b.Send(ctx, "*turtle:* "+err.Error(), ud.Message.Chat.ID, false)
@@ -209,13 +228,8 @@ func (b *Bot) turtle(ctx context.Context, ud *models.Update, args []string) {
 	}
 
 	enabled := !sess.AltSpeedEnabled
-	if len(args) > 0 {
-		switch strings.ToLower(args[0]) {
-		case "on", "1", "true", "enable":
-			enabled = true
-		case "off", "0", "false", "disable":
-			enabled = false
-		}
+	if requested != nil {
+		enabled = *requested
 	}
 
 	if err := b.Client.SetAltSpeedEnabled(ctx, enabled); err != nil {
@@ -234,7 +248,7 @@ func (b *Bot) turtle(ctx context.Context, ud *models.Update, args []string) {
 func (b *Bot) free(ctx context.Context, ud *models.Update, args []string) {
 	path := ""
 	if len(args) > 0 {
-		path = args[0]
+		path = strings.Join(args, " ")
 	} else {
 		sess, err := b.Client.GetSession(ctx)
 		if err != nil {

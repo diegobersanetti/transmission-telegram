@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/go-telegram/bot/models"
@@ -87,5 +88,46 @@ func TestTrackersCountsDistinctTorrentsInStableOrder(t *testing.T) {
 	const want = "2 - tracker.example.com\n1 - z.example.net\n"
 	if got := texts[len(texts)-1]; got != want {
 		t.Fatalf("tracker response = %q, want %q", got, want)
+	}
+}
+
+func TestPathCommandsPreserveSpaces(t *testing.T) {
+	ft := newFakeTelegram(t)
+	fts := newFakeTransmission(t)
+	client, err := transmission.New(fts.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatalf("failed to create transmission client: %v", err)
+	}
+	b := newTestBot(t, ft.newBot(t), client)
+
+	b.downloaddir(context.Background(), sortUpdate(), []string{"/media/My", "Downloads"})
+	b.free(context.Background(), sortUpdate(), []string{"/media/My", "Downloads"})
+
+	for _, method := range []string{"session-set", "free-space"} {
+		bodies := fts.requestBodies(method)
+		if len(bodies) != 1 || !strings.Contains(bodies[0], "/media/My Downloads") {
+			t.Fatalf("%s did not preserve spaced path: %v", method, bodies)
+		}
+	}
+}
+
+func TestTurtleRejectsInvalidArgument(t *testing.T) {
+	ft := newFakeTelegram(t)
+	fts := newFakeTransmission(t)
+	client, err := transmission.New(fts.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatalf("failed to create transmission client: %v", err)
+	}
+	b := newTestBot(t, ft.newBot(t), client)
+	baselineSessionGets := fts.methodCount("session-get")
+
+	b.turtle(context.Background(), sortUpdate(), []string{"maybe"})
+
+	if got := fts.methodCount("session-get"); got != baselineSessionGets {
+		t.Fatalf("invalid turtle argument performed an RPC: before=%d after=%d", baselineSessionGets, got)
+	}
+	texts := ft.sentTexts()
+	if len(texts) == 0 || texts[len(texts)-1] != "*turtle:* expected on or off" {
+		t.Fatalf("unexpected turtle response: %v", texts)
 	}
 }

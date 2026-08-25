@@ -24,6 +24,7 @@ type fakeTransmission struct {
 	mu         sync.Mutex
 	addBodies  []string
 	rpcMethods []string
+	rpcBodies  map[string][]string
 	torrents   transmission.Torrents
 }
 
@@ -31,7 +32,7 @@ type fakeTransmission struct {
 // torrent-add request bodies.
 func newFakeTransmission(t *testing.T) *fakeTransmission {
 	t.Helper()
-	f := &fakeTransmission{}
+	f := &fakeTransmission{rpcBodies: make(map[string][]string)}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var req struct {
@@ -40,6 +41,7 @@ func newFakeTransmission(t *testing.T) *fakeTransmission {
 		_ = json.Unmarshal(body, &req)
 		f.mu.Lock()
 		f.rpcMethods = append(f.rpcMethods, req.Method)
+		f.rpcBodies[req.Method] = append(f.rpcBodies[req.Method], string(body))
 		f.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -91,6 +93,12 @@ func (f *fakeTransmission) methodCount(method string) int {
 		}
 	}
 	return count
+}
+
+func (f *fakeTransmission) requestBodies(method string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.rpcBodies[method]...)
 }
 
 // TestReceiveTorrentDoesNotLeakToken verifies that an uploaded .torrent is

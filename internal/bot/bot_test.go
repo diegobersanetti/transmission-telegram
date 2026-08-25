@@ -105,6 +105,9 @@ func TestNormalizeCommand(t *testing.T) {
 		{"magnet:?xt=urn:btih:xyz", "add", true},
 		{"http://example.com/test.torrent", "add", true},
 		{"https://example.com/test.torrent", "add", true},
+		{"HTTPS://example.com/test.torrent", "add", true},
+		{"MAGNET:?xt=urn:btih:xyz", "add", true},
+		{"http-not-a-url", "http-not-a-url", false},
 		{"/add", "add", false},
 	}
 

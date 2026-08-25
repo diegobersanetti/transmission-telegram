@@ -120,10 +120,11 @@ func (b *Bot) Start(ctx context.Context) {
 // - strips trailing "@botname" from group mentions
 // - lowercases the command
 func normalizeCommand(token string) (cmd string, isLink bool) {
-	if strings.HasPrefix(token, "magnet") || strings.HasPrefix(token, "http") {
+	lowerToken := strings.ToLower(token)
+	if strings.HasPrefix(lowerToken, "magnet:") || strings.HasPrefix(lowerToken, "http://") || strings.HasPrefix(lowerToken, "https://") {
 		return "add", true
 	}
-	token = strings.ToLower(token)
+	token = lowerToken
 	token = strings.TrimPrefix(token, "/")
 	token = strings.Split(token, "@")[0]
 	return token, false
