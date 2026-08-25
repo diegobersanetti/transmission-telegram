@@ -30,8 +30,11 @@ type Bot struct {
 // commandFunc is the handler signature for bot commands.
 type commandFunc func(ctx context.Context, ud *models.Update, args []string)
 
-// New creates a new Bot instance.
-func New(cfg *config.Config, client *transmission.TransmissionClient, logger *slog.Logger) (*Bot, error) {
+// New creates a new Bot instance and performs the Telegram startup calls.
+func New(ctx context.Context, cfg *config.Config, client *transmission.TransmissionClient, logger *slog.Logger) (*Bot, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -65,24 +68,25 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *sl
 	b.API = api
 
 	// Remove any stale webhook so long polling receives updates reliably
-	_, _ = api.DeleteWebhook(context.Background(), &tgbot.DeleteWebhookParams{
+	if _, err := api.DeleteWebhook(ctx, &tgbot.DeleteWebhookParams{
 		DropPendingUpdates: false,
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("delete stale Telegram webhook: %w", err)
+	}
 
-	me, err := api.GetMe(context.Background())
-	if err == nil {
+	me, err := api.GetMe(ctx)
+	if err != nil {
+		logger.Warn("GetMe failed after Telegram initialization", "error", err)
+	} else {
 		logger.Info("Telegram bot authorized", "username", me.Username)
 	}
 
 	// Register command list with Telegram menu button
-	go func() {
-		_, err := api.SetMyCommands(context.Background(), &tgbot.SetMyCommandsParams{
-			Commands: defaultBotCommands(),
-		})
-		if err != nil {
-			logger.Warn("SetMyCommands failed", "error", err)
-		}
-	}()
+	if _, err := api.SetMyCommands(ctx, &tgbot.SetMyCommandsParams{
+		Commands: defaultBotCommands(),
+	}); err != nil {
+		logger.Warn("SetMyCommands failed", "error", err)
+	}
 
 	return b, nil
 }

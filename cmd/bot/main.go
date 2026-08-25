@@ -17,6 +17,8 @@ import (
 
 func main() {
 	cfg := config.Parse()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	// Setup structured logger
 	var logOutput *os.File = os.Stdout
@@ -48,14 +50,11 @@ func main() {
 	}
 
 	// Create bot instance
-	b, err := bot.New(cfg, client, logger)
+	b, err := bot.New(ctx, cfg, client, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Telegram: %s\n", err)
 		os.Exit(1)
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	// Start completion notifications
 	if cfg.TransLogFile != "" {
