@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -35,9 +36,8 @@ func main() {
 
 	logger.Info("Starting transmission-telegram",
 		"version", config.VERSION,
-		"masters", cfg.Masters,
-		"url", cfg.RPCURL,
-		"user", cfg.Username,
+		"master_count", len(cfg.Masters),
+		"rpc_endpoint", safeEndpoint(cfg.RPCURL),
 	)
 
 	// Initialize Transmission client
@@ -72,4 +72,18 @@ func main() {
 
 	// Run the bot (blocks until context is cancelled)
 	b.Start(ctx)
+}
+
+// safeEndpoint keeps operationally useful URL details out of logs without
+// exposing embedded credentials, query tokens, or fragments.
+func safeEndpoint(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "[invalid URL]"
+	}
+	u.User = nil
+	u.RawQuery = ""
+	u.ForceQuery = false
+	u.Fragment = ""
+	return u.String()
 }

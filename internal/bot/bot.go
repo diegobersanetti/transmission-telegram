@@ -158,7 +158,6 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 			"username", username,
 			"user_id", userID,
 			"chat_id", update.Message.Chat.ID,
-			"allowed_masters", b.Config.Masters,
 		)
 		return
 	}
@@ -170,7 +169,8 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 		"sender", username,
 		"user_id", userID,
 		"chat_id", update.Message.Chat.ID,
-		"text", update.Message.Text,
+		"message_id", update.Message.ID,
+		"has_document", update.Message.Document != nil,
 	)
 
 	fields := strings.Fields(update.Message.Text)
@@ -189,14 +189,14 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 		args = fields[1:]
 	}
 
-	b.Logger.Info("Dispatching command", "command", command, "args", args, "sender", username)
+	b.Logger.Info("Dispatching command", "command", command, "arg_count", len(args), "sender", username)
 
 	if handler, ok := b.commands[command]; ok {
 		go handler(ctx, update, args)
 	} else if command == "" {
 		go b.receiveTorrent(ctx, update)
 	} else {
-		b.Logger.Warn("Unknown command", "command", command, "sender", username)
+		b.Logger.Warn("Unknown command", "sender", username, "user_id", userID)
 		go b.Send(ctx, "No such command, try /help", update.Message.Chat.ID, false)
 	}
 }

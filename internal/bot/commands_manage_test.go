@@ -187,4 +187,15 @@ func TestDownloadTelegramFile(t *testing.T) {
 			t.Errorf("unexpected error %q", err)
 		}
 	})
+
+	t.Run("network error redacts token URL", func(t *testing.T) {
+		const secret = "123456:SUPER-SECRET-TOKEN"
+		_, err := downloadTelegramFile(context.Background(), "://api.telegram.org/file/bot"+secret+"/upload.torrent")
+		if err == nil {
+			t.Fatal("expected malformed download URL to fail")
+		}
+		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "api.telegram.org") {
+			t.Fatalf("download error exposed the private URL: %q", err)
+		}
+	})
 }

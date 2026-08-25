@@ -67,6 +67,7 @@ func (b *Bot) receiveTorrent(ctx context.Context, ud *models.Update) {
 	// being disclosed to Transmission.
 	data, err := downloadTelegramFile(ctx, b.API.FileDownloadLink(file))
 	if err != nil {
+		b.Logger.Warn("Telegram file download failed", "error", err)
 		b.Send(ctx, "*receiver:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
@@ -97,11 +98,11 @@ var torrentDownloadClient = &http.Client{Timeout: 60 * time.Second}
 func downloadTelegramFile(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, privateDownloadError{cause: err}
 	}
 	resp, err := torrentDownloadClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, privateDownloadError{cause: err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -117,6 +118,20 @@ func downloadTelegramFile(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("file exceeds maximum size of %d bytes", maxTorrentDownloadSize)
 	}
 	return data, nil
+}
+
+// privateDownloadError retains the underlying error for errors.Is/As while
+// ensuring its token-bearing Telegram URL is never rendered in a log or chat.
+type privateDownloadError struct {
+	cause error
+}
+
+func (e privateDownloadError) Error() string {
+	return "could not download file from Telegram"
+}
+
+func (e privateDownloadError) Unwrap() error {
+	return e.cause
 }
 
 // del takes an id or more, and delete the corresponding torrent/s
