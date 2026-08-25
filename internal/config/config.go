@@ -223,7 +223,7 @@ func ParseFlags(fs *flag.FlagSet, args []string, getenv func(string) string) (*C
 	cfg.BotToken = strings.TrimSpace(cfg.BotToken)
 	cfg.RPCURL = strings.TrimSpace(cfg.RPCURL)
 	if cfg.BotToken == "" {
-		return nil, errors.New("Telegram bot token is required (-token or TT_BOT_TOKEN)")
+		return nil, errors.New("telegram bot token is required (-token or TT_BOT_TOKEN)")
 	}
 	if len(cfg.Masters) < 1 {
 		return nil, errors.New("at least one authorized user is required (-master)")
