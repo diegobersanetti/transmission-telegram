@@ -3,9 +3,9 @@
 [![CI](https://github.com/pyed/transmission-telegram/actions/workflows/ci.yml/badge.svg)](https://github.com/pyed/transmission-telegram/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pyed/transmission-telegram)](https://goreportcard.com/report/github.com/pyed/transmission-telegram)
 [![Release](https://img.shields.io/github/v/release/pyed/transmission-telegram)](https://github.com/pyed/transmission-telegram/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-#### Manage and monitor your Transmission BitTorrent client through Telegram.
+### Manage and monitor your Transmission BitTorrent client through Telegram.
 
 <img src="https://raw.github.com/pyed/transmission-telegram/master/demo.gif" width="450" />
 
@@ -14,11 +14,11 @@
 ## Key Features
 
 - ⚡ **Modern Telegram Bot Engine**: Built with [`github.com/go-telegram/bot`](https://github.com/go-telegram/bot) with native graceful shutdown, context propagation, and structured `log/slog` logging.
-- 🎛 **Interactive Inline Buttons**: Control torrents (`[ ⏸ Pause ]`, `[ ▶ Resume ]`, `[ 🗑 Delete ]`) directly from `/info` with instant feedback.
+- 🎛 **Interactive Inline Buttons**: Pause, resume, and delete torrents from `/info`; destructive inline deletion requires an explicit confirmation.
 - 📊 **Visual Progress Bars**: Clean Unicode progress bars (`[█████░░░░░] 50.0%`) on `/head`, `/tail`, `/active`, `/paused`, `/checking`, and `/info`.
-- 🔔 **Polling Completion Alerts**: Automatic completion notifications via Transmission RPC — works across Docker, Kubernetes, NAS, and remote seedboxes without needing local log file access.
+- 🔔 **Operational Alerts**: Receive completion notifications plus one-shot Transmission outage and recovery alerts through the default RPC watcher. Optional logfile monitoring follows file rotation and falls back to RPC polling if startup fails.
 - 🐢 **Turtle Mode & Utilities**: Instant speed toggling (`/turtle`), free disk space checker (`/free`), and manual tracker re-announcing (`/reannounce`).
-- 🔒 **Flexible Authorization**: Secure `-master` list supporting both Telegram `@usernames` and permanent numeric user IDs.
+- 🔒 **Flexible Authorization**: Restrict access with a repeatable `-master` list supporting Telegram usernames and stable numeric user IDs.
 - 👥 **Group Chat Ready**: Clean handling of group mentions (e.g. `/list@BotName`).
 - 📱 **Telegram Menu Auto-Registration**: Automatically configures the Telegram command suggestion menu on startup.
 
@@ -27,9 +27,13 @@
 ## Installation
 
 ### Pre-compiled Binaries
-Download the pre-compiled binary for Linux, macOS, or Windows from the [Releases](https://github.com/pyed/transmission-telegram/releases) page.
+
+Download an archive for Linux, macOS, Windows, or FreeBSD from the [Releases](https://github.com/pyed/transmission-telegram/releases) page. Each release includes SHA-256 checksums.
 
 ### From Source (Go 1.21+)
+
+Go 1.21 is the tested minimum; using a current supported Go release is recommended.
+
 ```bash
 go install github.com/pyed/transmission-telegram/cmd/bot@latest
 ```
@@ -42,20 +46,21 @@ go install github.com/pyed/transmission-telegram/cmd/bot@latest
 
 | Flag | Environment Variable | Description |
 |---|---|---|
-| `-token` | `TT_BOTT` | Telegram Bot Token (*Required*) |
-| `-master` | — | Telegram `@username` or numeric user ID (*Required*, repeatable) |
+| `-token` | `TT_BOT_TOKEN` (`TT_BOTT` legacy) | Telegram bot token (*required*) |
+| `-master` | — | Authorized Telegram username or numeric user ID (*required*, repeatable) |
 | `-url` | `TR_URL` | Transmission RPC URL (default: `http://localhost:9091/transmission/rpc`) |
-| `-username` | `TR_AUTH` (`user:pass`) | Transmission RPC username |
-| `-password` | `TR_AUTH` (`user:pass`) | Transmission RPC password |
+| `-username` | `TR_AUTH` (`user:password`) | Transmission RPC username |
+| `-password` | `TR_AUTH` (`user:password`) | Transmission RPC password |
 | `-logfile` | — | Send bot logs to a file (default: stdout) |
-| `-transmission-logfile` | — | Path to Transmission daemon log file (optional; defaults to RPC polling) |
+| `-transmission-logfile` | — | Read completion events from a local Transmission log (optional; defaults to RPC polling) |
 | `-no-live` | — | Disable real-time editing and live update loops |
+
+Explicit flags override the corresponding environment defaults. Prefer numeric Telegram user IDs for `-master`; unlike usernames, they cannot be renamed or reassigned.
 
 ### Example CLI Usage
 ```bash
 transmission-telegram \
   -token="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" \
-  -master="@YourUsername" \
   -master="123456789" \
   -url="http://localhost:9091/transmission/rpc" \
   -username="admin" \
@@ -94,7 +99,7 @@ transmission-telegram \
 | `/downlimit <KB/s>` | `/dl` | Set global download speed limit |
 | `/uplimit <KB/s>` | `/ul` | Set global upload speed limit |
 | `/downloaddir <path>` | `/dd` | Set default download directory |
-| `/sort <method>` | `/so` | Sort torrent listings (`id`, `name`, `age`, `size`, `progress`, `downspeed`, `upspeed`, `ratio`, prefix with `rev` for reverse) |
+| `/sort <method>` | `/so` | Sort torrent listings (`id`, `name`, `age`, `size`, `progress`, `downspeed`, `upspeed`, `download`, `upload`, `ratio`; prefix with `rev` for reverse) |
 | `/trackers` | `/tr` | List trackers and torrent counts |
 | `/count` | `/co` | Show torrent counts grouped by status |
 | `/help` | — | Display command help |
@@ -108,25 +113,39 @@ transmission-telegram \
 ```bash
 docker run -d --name transmission-telegram \
   --restart unless-stopped \
-  -e TT_BOTT="<YOUR_BOT_TOKEN>" \
+  --add-host=host.docker.internal:host-gateway \
+  -e TT_BOT_TOKEN="<YOUR_BOT_TOKEN>" \
+  -e TR_URL="http://host.docker.internal:9091/transmission/rpc" \
   -e TR_AUTH="<username>:<password>" \
   pyed/transmission-telegram:latest \
-  -master="@YourUsername" \
-  -url="http://transmission:9091/transmission/rpc"
+  -master="<YOUR_NUMERIC_TELEGRAM_ID>"
 ```
 
-### Docker Compose
-```yaml
-version: '3.8'
+The example connects to Transmission on the Docker host. When both applications run in Compose, use the Transmission service name instead.
 
+### Docker Compose
+
+Create a local `.env` file (never commit it):
+
+```dotenv
+TT_BOT_TOKEN=123456789:replace-with-your-token
+TELEGRAM_MASTER_ID=123456789
+TRANSMISSION_PASSWORD=replace-with-a-strong-password
+```
+
+Then use:
+
+```yaml
 services:
   transmission:
-    image: linuxserver/transmission:latest
+    image: lscr.io/linuxserver/transmission:latest
     container_name: transmission
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
+      PUID: 1000
+      PGID: 1000
+      TZ: Etc/UTC
+      USER: transmission
+      PASS: ${TRANSMISSION_PASSWORD}
     volumes:
       - /path/to/config:/config
       - /path/to/downloads:/downloads
@@ -142,16 +161,30 @@ services:
     depends_on:
       - transmission
     restart: unless-stopped
-    command: >
-      -token="YOUR_BOT_TOKEN"
-      -master="@YourTelegramUsername"
-      -url="http://transmission:9091/transmission/rpc"
-      -username="admin"
-      -password="password"
+    environment:
+      TT_BOT_TOKEN: ${TT_BOT_TOKEN}
+      TR_URL: http://transmission:9091/transmission/rpc
+      TR_AUTH: transmission:${TRANSMISSION_PASSWORD}
+    command: ["-master=${TELEGRAM_MASTER_ID}"]
 ```
+
+---
+
+## Security
+
+- Treat the Telegram bot token and Transmission credentials as secrets. Keep them in protected environment or secret-management facilities and never commit `.env` files.
+- Prefer a numeric Telegram user ID in `-master`, especially for bots that can delete torrent data.
+- Keep Transmission RPC on a trusted network or behind appropriate access controls; do not expose an unauthenticated endpoint to the public internet.
+- Inline delete buttons expire if torrent identity changes and require confirmation. The explicit `/deldata` command still deletes local data immediately, so use it carefully.
+
+Please report vulnerabilities according to [SECURITY.md](SECURITY.md), not in a public issue.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local verification commands and contribution workflow.
 
 ---
 
 ## License
 
-[MIT](LICENSE)
+Licensed under the [Apache License 2.0](LICENSE).
