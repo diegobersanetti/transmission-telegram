@@ -215,11 +215,15 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb *models.CallbackQuery)
 		return
 	}
 
-	// Expected callback format: cmd:<action>:<id>
+	// Expected callback format: cmd:<action>:<id>:<torrent fingerprint>.
+	// Pause/resume callbacks from v2.0.0 remain supported, but legacy delete
+	// buttons are deliberately expired because they were destructive and were
+	// not tied to a stable torrent identity.
 	parts := strings.Split(cb.Data, ":")
-	if len(parts) != 3 || parts[0] != "cmd" {
+	if (len(parts) != 3 && len(parts) != 4) || parts[0] != "cmd" {
 		b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
 			CallbackQueryID: cb.ID,
+			Text:            "Invalid action",
 		})
 		return
 	}
@@ -234,35 +238,104 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb *models.CallbackQuery)
 		return
 	}
 
+	if len(parts) == 3 && action == "del" {
+		b.answerCallback(ctx, cb.ID, "Delete button expired; run /info again", true)
+		return
+	}
+
+	torrent, err := b.Client.GetTorrent(torrentID, ctx)
+	if err != nil {
+		b.answerCallback(ctx, cb.ID, "Torrent no longer exists", true)
+		return
+	}
+	if len(parts) == 4 && parts[3] != torrentFingerprint(torrent.HashString) {
+		b.answerCallback(ctx, cb.ID, "Torrent changed; run /info again", true)
+		return
+	}
+
 	var answerText string
 	switch action {
 	case "stop":
-		status, err := b.Client.StopTorrent(torrentID)
-		if err != nil {
+		if err := b.Client.StopTorrents(ctx, torrentID); err != nil {
 			answerText = "Error stopping: " + err.Error()
 		} else {
-			answerText = fmt.Sprintf("[%s] Torrent paused", status)
+			answerText = "Torrent paused"
 		}
 	case "start":
-		status, err := b.Client.StartTorrent(torrentID)
-		if err != nil {
+		if err := b.Client.StartTorrents(ctx, torrentID); err != nil {
 			answerText = "Error resuming: " + err.Error()
 		} else {
-			answerText = fmt.Sprintf("[%s] Torrent resumed", status)
+			answerText = "Torrent resumed"
 		}
 	case "del":
-		name, err := b.Client.DeleteTorrent(torrentID, false)
-		if err != nil {
-			answerText = "Error deleting: " + err.Error()
-		} else {
-			answerText = "Deleted: " + name
+		if err := b.editCallbackKeyboard(ctx, cb, deleteConfirmationKeyboard(torrent.ID, torrent.HashString)); err != nil {
+			b.Logger.Warn("Failed to show delete confirmation", "error", err, "torrent_id", torrentID)
+			b.answerCallback(ctx, cb.ID, fmt.Sprintf("Use /del %d to delete", torrentID), true)
+			return
 		}
+		b.answerCallback(ctx, cb.ID, "Confirm deletion below", false)
+		return
+	case "confirm-del":
+		if err := b.Client.RemoveTorrents(ctx, false, torrentID); err != nil {
+			answerText = "Error deleting: " + err.Error()
+			break
+		}
+		answerText = "Deleted: " + torrent.Name
+		if err := b.editCallbackKeyboard(ctx, cb, &models.InlineKeyboardMarkup{}); err != nil {
+			b.Logger.Warn("Failed to remove deleted torrent keyboard", "error", err, "torrent_id", torrentID)
+		}
+	case "cancel":
+		if err := b.editCallbackKeyboard(ctx, cb, infoKeyboard(torrent.ID, torrent.HashString)); err != nil {
+			b.Logger.Warn("Failed to restore torrent keyboard", "error", err, "torrent_id", torrentID)
+			answerText = "Could not cancel; run /info again"
+		} else {
+			answerText = "Deletion cancelled"
+		}
+	default:
+		answerText = "Unknown action"
 	}
 
-	b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
-		CallbackQueryID: cb.ID,
-		Text:            answerText,
-	})
+	b.answerCallback(ctx, cb.ID, answerText, false)
+}
+
+func torrentFingerprint(hash string) string {
+	const fingerprintLength = 16
+	hash = strings.ToLower(strings.TrimSpace(hash))
+	if len(hash) > fingerprintLength {
+		return hash[:fingerprintLength]
+	}
+	return hash
+}
+
+func (b *Bot) answerCallback(ctx context.Context, callbackID, text string, alert bool) {
+	if _, err := b.API.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: callbackID,
+		Text:            text,
+		ShowAlert:       alert,
+	}); err != nil {
+		b.Logger.Warn("AnswerCallbackQuery failed", "error", err)
+	}
+}
+
+func (b *Bot) editCallbackKeyboard(ctx context.Context, cb *models.CallbackQuery, markup models.ReplyMarkup) error {
+	params := &tgbot.EditMessageReplyMarkupParams{
+		InlineMessageID: cb.InlineMessageID,
+		ReplyMarkup:     markup,
+	}
+
+	switch {
+	case cb.Message.Message != nil:
+		params.ChatID = cb.Message.Message.Chat.ID
+		params.MessageID = cb.Message.Message.ID
+	case cb.Message.InaccessibleMessage != nil:
+		params.ChatID = cb.Message.InaccessibleMessage.Chat.ID
+		params.MessageID = cb.Message.InaccessibleMessage.MessageID
+	case cb.InlineMessageID == "":
+		return fmt.Errorf("callback has no message target")
+	}
+
+	_, err := b.API.EditMessageReplyMarkup(ctx, params)
+	return err
 }
 
 // ChatID returns the current chat ID atomically (used by the notify package).

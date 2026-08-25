@@ -20,9 +20,11 @@ const testBotToken = "123456:TEST-TOKEN"
 // fakeTelegram is a minimal in-process Telegram Bot API server for tests.
 type fakeTelegram struct {
 	*httptest.Server
-	mu        sync.Mutex
-	texts     []string
-	fileBytes []byte
+	mu              sync.Mutex
+	texts           []string
+	callbackTexts   []string
+	markupEditCalls int
+	fileBytes       []byte
 }
 
 // newFakeTelegram starts a fake Telegram Bot API server.
@@ -43,6 +45,16 @@ func newFakeTelegram(t *testing.T) *fakeTelegram {
 			f.texts = append(f.texts, r.FormValue("text"))
 			f.mu.Unlock()
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"id":1,"chat":{"id":1}}}`))
+		case strings.HasSuffix(r.URL.Path, "/answerCallbackQuery"):
+			f.mu.Lock()
+			f.callbackTexts = append(f.callbackTexts, r.FormValue("text"))
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"ok":true,"result":true}`))
+		case strings.HasSuffix(r.URL.Path, "/editMessageReplyMarkup"):
+			f.mu.Lock()
+			f.markupEditCalls++
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1,"date":1,"chat":{"id":42,"type":"private"}}}`))
 		case strings.HasSuffix(r.URL.Path, "/getFile"):
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"file_id":"test-file-id","file_path":"bots/123456/upload.torrent"}}`))
 		default:
@@ -69,6 +81,18 @@ func (f *fakeTelegram) sentTexts() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.texts...)
+}
+
+func (f *fakeTelegram) callbackAnswers() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.callbackTexts...)
+}
+
+func (f *fakeTelegram) markupEdits() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.markupEditCalls
 }
 
 // newTestBot builds a Bot wired to a fake Telegram server and (optionally)

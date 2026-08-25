@@ -51,7 +51,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 			humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver), time.Unix(torrent.AddedDate, 0).Format(time.Stamp),
 			torrent.ETA(), trackers)
 
-		keyboard := infoKeyboard(torrent.ID)
+		keyboard := infoKeyboard(torrent.ID, torrent.HashString)
 
 		// send it
 		msgID := b.SendWithKeyboard(ctx, info, ud.Message.Chat.ID, true, keyboard)
@@ -88,14 +88,29 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 	}
 }
 
-// infoKeyboard returns inline action buttons for controlling a torrent.
-func infoKeyboard(torrentID int) *models.InlineKeyboardMarkup {
+// infoKeyboard returns inline action buttons for controlling a torrent. The
+// callback includes a torrent fingerprint so buttons from an old message
+// cannot affect a different torrent that later reuses the same numeric ID.
+func infoKeyboard(torrentID int, hash string) *models.InlineKeyboardMarkup {
+	fingerprint := torrentFingerprint(hash)
 	return &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
-				{Text: "⏸ Pause", CallbackData: fmt.Sprintf("cmd:stop:%d", torrentID)},
-				{Text: "▶ Resume", CallbackData: fmt.Sprintf("cmd:start:%d", torrentID)},
-				{Text: "🗑 Delete", CallbackData: fmt.Sprintf("cmd:del:%d", torrentID)},
+				{Text: "⏸ Pause", CallbackData: fmt.Sprintf("cmd:stop:%d:%s", torrentID, fingerprint)},
+				{Text: "▶ Resume", CallbackData: fmt.Sprintf("cmd:start:%d:%s", torrentID, fingerprint)},
+				{Text: "🗑 Delete", CallbackData: fmt.Sprintf("cmd:del:%d:%s", torrentID, fingerprint)},
+			},
+		},
+	}
+}
+
+func deleteConfirmationKeyboard(torrentID int, hash string) *models.InlineKeyboardMarkup {
+	fingerprint := torrentFingerprint(hash)
+	return &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{
+			{
+				{Text: "⚠️ Confirm delete", CallbackData: fmt.Sprintf("cmd:confirm-del:%d:%s", torrentID, fingerprint)},
+				{Text: "Cancel", CallbackData: fmt.Sprintf("cmd:cancel:%d:%s", torrentID, fingerprint)},
 			},
 		},
 	}

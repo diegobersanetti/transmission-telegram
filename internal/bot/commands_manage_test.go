@@ -21,8 +21,10 @@ var fakeTorrent = []byte("d8:announce19:http://tracker.example/4:infod6:lengthi1
 // fakeTransmission is a minimal in-process Transmission RPC server.
 type fakeTransmission struct {
 	*httptest.Server
-	mu        sync.Mutex
-	addBodies []string
+	mu         sync.Mutex
+	addBodies  []string
+	rpcMethods []string
+	torrents   transmission.Torrents
 }
 
 // newFakeTransmission starts a fake Transmission RPC server that records
@@ -36,6 +38,9 @@ func newFakeTransmission(t *testing.T) *fakeTransmission {
 			Method string `json:"method"`
 		}
 		_ = json.Unmarshal(body, &req)
+		f.mu.Lock()
+		f.rpcMethods = append(f.rpcMethods, req.Method)
+		f.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		switch req.Method {
@@ -46,6 +51,21 @@ func newFakeTransmission(t *testing.T) *fakeTransmission {
 			f.addBodies = append(f.addBodies, string(body))
 			f.mu.Unlock()
 			_, _ = w.Write([]byte(`{"result":"success","arguments":{"torrent-added":{"id":7,"name":"Test Torrent","hashString":"abc123"}}}`))
+		case "torrent-get":
+			f.mu.Lock()
+			torrents := append(transmission.Torrents(nil), f.torrents...)
+			f.mu.Unlock()
+			_ = json.NewEncoder(w).Encode(struct {
+				Result    string `json:"result"`
+				Arguments struct {
+					Torrents transmission.Torrents `json:"torrents"`
+				} `json:"arguments"`
+			}{
+				Result: "success",
+				Arguments: struct {
+					Torrents transmission.Torrents `json:"torrents"`
+				}{Torrents: torrents},
+			})
 		default:
 			_, _ = w.Write([]byte(`{"result":"success","arguments":{}}`))
 		}
@@ -59,6 +79,18 @@ func (f *fakeTransmission) addRequests() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.addBodies...)
+}
+
+func (f *fakeTransmission) methodCount(method string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var count int
+	for _, got := range f.rpcMethods {
+		if got == method {
+			count++
+		}
+	}
+	return count
 }
 
 // TestReceiveTorrentDoesNotLeakToken verifies that an uploaded .torrent is
