@@ -57,7 +57,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 		msgID := b.SendWithKeyboard(ctx, info, ud.Message.Chat.ID, true, keyboard)
 
 		// this go-routine will make the info live for 'duration * interval'
-		go func(torrentID, msgID int, trackers string) {
+		b.goSafe("live torrent info update", func() {
 			b.liveUpdateWithKeyboard(ctx, ud.Message.Chat.ID, msgID, func() string {
 				torrent, err := b.Client.GetTorrent(torrentID, ctx)
 				if err != nil {
@@ -84,7 +84,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 					torrent.Ratio(), humanize.Bytes(torrent.DownloadedEver), humanize.Bytes(torrent.UploadedEver),
 					time.Unix(torrent.AddedDate, 0).Format(time.Stamp), trackers)
 			}, keyboard)
-		}(torrentID, msgID, trackers)
+		})
 	}
 }
 

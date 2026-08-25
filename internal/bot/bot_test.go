@@ -1,11 +1,14 @@
 package bot
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/pyed/transmission"
 	"github.com/pyed/transmission-telegram/internal/config"
@@ -253,5 +256,21 @@ func TestLegacyDeleteCallbackExpiresSafely(t *testing.T) {
 	}
 	if answers := ft.callbackAnswers(); len(answers) != 1 || answers[0] != "Delete button expired; run /info again" {
 		t.Fatalf("unexpected callback answer: %v", answers)
+	}
+}
+
+func TestRecoverMiddlewareContainsHandlerPanic(t *testing.T) {
+	var logs bytes.Buffer
+	b := &Bot{Logger: slog.New(slog.NewTextHandler(&logs, nil))}
+	handler := b.recoverMiddleware(func(context.Context, *tgbot.Bot, *models.Update) {
+		panic("malformed update")
+	})
+
+	handler(context.Background(), nil, &models.Update{ID: 123})
+
+	logOutput := logs.String()
+	if !strings.Contains(logOutput, "Recovered from Telegram update panic") ||
+		!strings.Contains(logOutput, "update_id=123") {
+		t.Fatalf("expected recovered panic to be logged, got %q", logOutput)
 	}
 }

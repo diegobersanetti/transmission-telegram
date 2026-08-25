@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -54,6 +55,7 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *sl
 
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(b.handleUpdate),
+		tgbot.WithMiddlewares(b.recoverMiddleware),
 		tgbot.WithErrorsHandler(func(err error) {
 			logger.Error("Telegram API error", "error", err)
 		}),
@@ -133,7 +135,7 @@ func normalizeCommand(token string) (cmd string, isLink bool) {
 // handleUpdate processes incoming updates from Telegram.
 func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Update) {
 	if update.CallbackQuery != nil {
-		go b.handleCallbackQuery(ctx, update.CallbackQuery)
+		b.handleCallbackQuery(ctx, update.CallbackQuery)
 		return
 	}
 
@@ -176,7 +178,7 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 	fields := strings.Fields(update.Message.Text)
 	if len(fields) == 0 {
 		if update.Message.Document != nil {
-			go b.receiveTorrent(ctx, update)
+			b.receiveTorrent(ctx, update)
 		}
 		return
 	}
@@ -192,13 +194,43 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *tgbot.Bot, update *models.Upd
 	b.Logger.Info("Dispatching command", "command", command, "arg_count", len(args), "sender", username)
 
 	if handler, ok := b.commands[command]; ok {
-		go handler(ctx, update, args)
+		handler(ctx, update, args)
 	} else if command == "" {
-		go b.receiveTorrent(ctx, update)
+		b.receiveTorrent(ctx, update)
 	} else {
 		b.Logger.Warn("Unknown command", "sender", username, "user_id", userID)
-		go b.Send(ctx, "No such command, try /help", update.Message.Chat.ID, false)
+		b.Send(ctx, "No such command, try /help", update.Message.Chat.ID, false)
 	}
+}
+
+func (b *Bot) recoverMiddleware(next tgbot.HandlerFunc) tgbot.HandlerFunc {
+	return func(ctx context.Context, api *tgbot.Bot, update *models.Update) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				b.Logger.Error("Recovered from Telegram update panic",
+					"panic", recovered,
+					"update_id", update.ID,
+					"stack", string(debug.Stack()),
+				)
+			}
+		}()
+		next(ctx, api, update)
+	}
+}
+
+func (b *Bot) goSafe(operation string, fn func()) {
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				b.Logger.Error("Recovered from background task panic",
+					"operation", operation,
+					"panic", recovered,
+					"stack", string(debug.Stack()),
+				)
+			}
+		}()
+		fn()
+	}()
 }
 
 // handleCallbackQuery processes button clicks from inline keyboards.
