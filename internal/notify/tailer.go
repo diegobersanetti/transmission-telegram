@@ -43,53 +43,86 @@ func ParseCompletionLog(line string) (string, bool) {
 	return name, true
 }
 
-// StartTailer monitors a Transmission log file for completion events using standard library file operations.
-func StartTailer(ctx context.Context, logFile string, getChatID ChatIDProvider, send SendFunc, logger *slog.Logger) {
+// StartTailer monitors a Transmission log file for completion events using
+// standard library file operations. It starts at EOF, but follows later file
+// replacement or truncation so normal log rotation does not stop alerts.
+func StartTailer(ctx context.Context, logFile string, getChatID ChatIDProvider, send SendFunc, logger *slog.Logger) error {
+	file, err := openLogFile(logFile)
+	if err != nil {
+		return fmt.Errorf("open transmission logfile %q: %w", logFile, err)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return fmt.Errorf("stat transmission logfile %q: %w", logFile, err)
+	}
+	offset, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		file.Close()
+		return fmt.Errorf("seek transmission logfile %q: %w", logFile, err)
+	}
+
 	go func() {
-		file, err := os.Open(logFile)
-		if err != nil {
-			if logger != nil {
-				logger.Error("Failed to open transmission logfile", "path", logFile, "error", err)
-			}
-			return
-		}
-		defer file.Close()
-
-		// Seek to end of file so we only tail newly appended logs
-		if _, err := file.Seek(0, io.SeekEnd); err != nil {
-			if logger != nil {
-				logger.Error("Failed to seek transmission logfile", "error", err)
-			}
-			return
-		}
-
+		defer func() { _ = file.Close() }()
 		reader := bufio.NewReader(file)
+		var pending string
+
 		for {
+			line, readErr := reader.ReadString('\n')
+			if len(line) > 0 {
+				offset += int64(len(line))
+				pending += line
+			}
+			if strings.HasSuffix(pending, "\n") {
+				if torrentName, ok := ParseCompletionLog(strings.TrimRight(pending, "\r\n")); ok {
+					if cid := getChatID(); cid != 0 {
+						send(fmt.Sprintf("Completed: %s", torrentName), cid, false)
+					}
+				}
+				pending = ""
+			}
+
+			if readErr == nil {
+				continue
+			}
+			if !errors.Is(readErr, io.EOF) {
+				if logger != nil {
+					logger.Error("Error reading transmission logfile", "error", readErr)
+				}
+				return
+			}
+
 			select {
 			case <-ctx.Done():
 				return
-			default:
-				line, err := reader.ReadString('\n')
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						time.Sleep(500 * time.Millisecond)
-						continue
-					}
-					if logger != nil {
-						logger.Error("Error reading transmission logfile", "error", err)
-					}
-					return
-				}
+			case <-time.After(500 * time.Millisecond):
+			}
 
-				torrentName, ok := ParseCompletionLog(line)
-				if ok {
-					cid := getChatID()
-					if cid != 0 {
-						msg := fmt.Sprintf("Completed: %s", torrentName)
-						send(msg, cid, false)
-					}
-				}
+			currentInfo, statErr := os.Stat(logFile)
+			if statErr != nil {
+				continue
+			}
+			if os.SameFile(info, currentInfo) && currentInfo.Size() >= offset {
+				continue
+			}
+
+			newFile, openErr := openLogFile(logFile)
+			if openErr != nil {
+				continue
+			}
+			if closeErr := file.Close(); closeErr != nil && logger != nil {
+				logger.Warn("Failed to close rotated transmission logfile", "error", closeErr)
+			}
+			file = newFile
+			info = currentInfo
+			offset = 0
+			pending = ""
+			reader = bufio.NewReader(file)
+			if logger != nil {
+				logger.Info("Reopened rotated transmission logfile", "path", logFile)
 			}
 		}
 	}()
+
+	return nil
 }

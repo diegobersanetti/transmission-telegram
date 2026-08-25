@@ -93,7 +93,9 @@ func TestStartTailer(t *testing.T) {
 		return 123456
 	}
 
-	StartTailer(ctx, logFile, getChatID, send, nil)
+	if err := StartTailer(ctx, logFile, getChatID, send, nil); err != nil {
+		t.Fatalf("StartTailer failed: %v", err)
+	}
 
 	// Wait a moment for tailer to seek to EOF
 	time.Sleep(50 * time.Millisecond)
@@ -117,4 +119,47 @@ func TestStartTailer(t *testing.T) {
 		t.Errorf("expected 'Completed: Fedora 40 Workstation', got %q", sentMessages[0])
 	}
 	mu.Unlock()
+}
+
+func TestStartTailerReportsMissingFile(t *testing.T) {
+	err := StartTailer(context.Background(), filepath.Join(t.TempDir(), "missing.log"), func() int64 { return 1 }, func(string, int64, bool) int { return 1 }, nil)
+	if err == nil {
+		t.Fatal("expected missing logfile error")
+	}
+}
+
+func TestStartTailerFollowsRotation(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "transmission.log")
+	if err := os.WriteFile(logFile, []byte("initial line\n"), 0644); err != nil {
+		t.Fatalf("failed to create logfile: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	messages := make(chan string, 1)
+	if err := StartTailer(ctx, logFile, func() int64 { return 123 }, func(text string, _ int64, _ bool) int {
+		messages <- text
+		return 1
+	}, nil); err != nil {
+		t.Fatalf("StartTailer failed: %v", err)
+	}
+
+	rotated := filepath.Join(tempDir, "transmission.log.1")
+	if err := os.Rename(logFile, rotated); err != nil {
+		t.Fatalf("failed to rotate logfile: %v", err)
+	}
+	line := `[2026-08-25 22:00:00] Rotated Log Torrent State changed from "Incomplete" to "Complete" (torrent.c:1234)` + "\n"
+	if err := os.WriteFile(logFile, []byte(line), 0644); err != nil {
+		t.Fatalf("failed to create replacement logfile: %v", err)
+	}
+
+	select {
+	case got := <-messages:
+		if got != "Completed: Rotated Log Torrent" {
+			t.Fatalf("unexpected rotation notification %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for rotated logfile notification")
+	}
 }
