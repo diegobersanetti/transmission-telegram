@@ -47,7 +47,7 @@ func (b *Bot) registerCommands() {
 }
 
 func (b *Bot) help(ctx context.Context, ud *models.Update, args []string) {
-	b.Send(ctx, config.HELP, ud.Message.Chat.ID, true)
+	b.Send(ctx, config.Help, ud.Message.Chat.ID, true)
 }
 
 func (b *Bot) version(ctx context.Context, ud *models.Update, args []string) {

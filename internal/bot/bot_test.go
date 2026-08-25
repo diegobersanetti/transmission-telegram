@@ -162,6 +162,14 @@ func TestDefaultBotCommands(t *testing.T) {
 	}
 }
 
+func TestHelpCoversEveryMenuCommand(t *testing.T) {
+	for _, command := range defaultBotCommands() {
+		if !strings.Contains(config.Help, "/"+command.Command) {
+			t.Errorf("help text does not mention /%s", command.Command)
+		}
+	}
+}
+
 func TestInfoKeyboard(t *testing.T) {
 	kb := infoKeyboard(42, "0123456789abcdef0123456789abcdef01234567")
 	if kb == nil || len(kb.InlineKeyboard) != 1 || len(kb.InlineKeyboard[0]) != 3 {

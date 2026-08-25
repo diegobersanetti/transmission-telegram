@@ -11,106 +11,48 @@ import (
 	"time"
 )
 
-const (
-	HELP = `
-	*list* or *li* or *ls*
-	Lists all the torrents, takes an optional argument which is a query to list only torrents that has a tracker matches the query, or some of it.
+const Help = `
+*Torrent lists*
+/list (optional tracker) — all torrents, optionally filtered by tracker (/li, /ls)
+/head (optional n) — first n torrents with live speeds (/he)
+/tail (optional n) — last n torrents with live speeds (/ta)
+/active — actively transferring torrents (/ac)
+/downs — downloading and queued torrents (/dg)
+/seeding — seeding and queued torrents (/sd)
+/paused — stopped torrents (/pa)
+/checking — verifying and queued torrents (/ch)
+/errors — torrents with errors (/er)
+/latest (optional n) — newest torrents; default 5 (/la)
+/search <name> — search torrent names (/se)
+/info <id...> — details and inline controls (/in)
 
-	*head* or *he*
-	Lists the first n number of torrents, n defaults to 5 if no argument is provided.
+*Torrent control*
+/add <url|magnet...> — add one or more torrents (/ad)
+You can also send a .torrent document directly.
+/stop <id...|all> — pause torrents (/sp)
+/start <id...|all> — resume torrents (/st)
+/check <id...|all> — verify torrents (/ck)
+/del <id...> — remove torrents, keeping local data (/rm)
+/deldata <id...> — permanently remove torrents and local data
+/reannounce <id...|all> — contact trackers now (/ra)
 
-	*tail* or *ta*
-	Lists the last n number of torrents, n defaults to 5 if no argument is provided.
+*Session and settings*
+/speed — current transfer speeds (/ss)
+/stats — session and cumulative statistics (/sa)
+/count — torrent counts by status (/co)
+/trackers — tracker hosts and torrent counts (/tr)
+/sort (optional rev) <method> — set listing order (/so)
+/turtle (optional on|off) — alternative speed limits (/alt, /tu)
+/free (optional path) — available disk space (/space, /disk)
+/downlimit <KB/s> — global download limit (/dl)
+/uplimit <KB/s> — global upload limit (/ul)
+/downloaddir <path> — set the default download directory (/dd)
+/version — Transmission and bot versions (/ver)
+/help — show this message
 
-	*downs* or *dg*
-	Lists torrents with the status of _Downloading_ or in the queue to download.
-
-	*seeding* or *sd*
-	Lists torrents with the status of _Seeding_ or in the queue to seed.
-
-	*paused* or *pa*
-	Lists _Paused_ torrents.
-
-	*checking* or *ch*
-	Lists torrents with the status of _Verifying_ or in the queue to verify.
-
-	*active* or *ac*
-	Lists torrents that are actively uploading or downloading.
-
-	*errors* or *er*
-	Lists torrents with with errors along with the error message.
-
-	*sort* or *so*
-	Manipulate the sorting of the aforementioned commands. Call it without arguments for more.
-
-	*trackers* or *tr*
-	Lists all the trackers along with the number of torrents.
-
-	*downloaddir* or *dd*
-	Set download directory to the specified path. Transmission will automatically create a
-	directory in case you provided an inexistent one.
-
-	*add* or *ad*
-	Takes one or many URLs or magnets to add them. You can send a ".torrent" file via Telegram to add it.
-
-	*search* or *se*
-	Takes a query and lists torrents with matching names.
-
-	*latest* or *la*
-	Lists the newest n torrents, n defaults to 5 if no argument is provided.
-
-	*info* or *in*
-	Takes one or more torrent's IDs to list more info about them.
-
-	*stop* or *sp*
-	Takes one or more torrent's IDs to stop them, or _all_ to stop all torrents.
-
-	*start* or *st*
-	Takes one or more torrent's IDs to start them, or _all_ to start all torrents.
-
-	*check* or *ck*
-	Takes one or more torrent's IDs to verify them, or _all_ to verify all torrents.
-
-	*del* or *rm*
-	Takes one or more torrent's IDs to delete them.
-
-	*deldata*
-	Takes one or more torrent's IDs to delete them and their data.
-
-	*stats* or *sa*
-	Shows Transmission's stats.
-
-	*downlimit* or *dl*
-	Set global limit for download speed in kilobytes.
-
-	*uplimit* or *ul*
-	Set global limit for upload speed in kilobytes.
-
-	*speed* or *ss*
-	Shows the upload and download speeds.
-
-	*turtle* or *alt* or *tu*
-	Toggle alternative speed limits ("Turtle Mode") on or off.
-
-	*free* or *space* or *disk*
-	Shows available and total storage space for the download directory.
-
-	*reannounce* or *ra*
-	Forces an immediate tracker re-announce for specified torrent IDs or _all_.
-
-	*count* or *co*
-	Shows the torrents counts per status.
-
-	*help*
-	Shows this help message.
-
-	*version* or *ver*
-	Shows version numbers.
-
-	- Prefix commands with '/' if you want to talk to your bot in a group. 
-	- report any issues [here](https://github.com/pyed/transmission-telegram)
-	`
-)
+Only authorized users are accepted. In groups, Telegram may display commands as /command@BotName.
+Be careful with /deldata: it deletes downloaded files immediately.
+Report issues: https://github.com/pyed/transmission-telegram`
 
 // Version is overridden by release builds. Tagged go install builds fall back
 // to the module version recorded in Go build information.
