@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -121,18 +122,19 @@ func (b *Bot) trackers(ctx context.Context, ud *models.Update, args []string) {
 	trackerMap := make(map[string]int)
 
 	for i := range torrents {
-		for _, tracker := range torrents[i].Trackers {
-			sm := b.trackerRegex.FindSubmatch([]byte(tracker.Announce))
-			if len(sm) > 1 {
-				currentTracker := string(sm[1])
-				trackerMap[currentTracker]++
-			}
+		for _, host := range trackerHosts(torrents[i].Trackers) {
+			trackerMap[host]++
 		}
 	}
 
 	buf := new(bytes.Buffer)
-	for k, v := range trackerMap {
-		buf.WriteString(fmt.Sprintf("%d - %s\n", v, k))
+	hosts := make([]string, 0, len(trackerMap))
+	for host := range trackerMap {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts)
+	for _, host := range hosts {
+		buf.WriteString(fmt.Sprintf("%d - %s\n", trackerMap[host], host))
 	}
 
 	if buf.Len() == 0 {

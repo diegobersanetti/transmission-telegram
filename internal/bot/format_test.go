@@ -1,6 +1,11 @@
 package bot
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"github.com/pyed/transmission"
+)
 
 func TestProgressBar(t *testing.T) {
 	tests := []struct {
@@ -23,5 +28,20 @@ func TestProgressBar(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("progressBar(%f, %d) = %q, want %q", tt.percent, tt.width, got, tt.want)
 		}
+	}
+}
+
+func TestTrackerHosts(t *testing.T) {
+	trackers := []transmission.Tracker{
+		{Announce: "https://Tracker.Example.com:443/announce?passkey=secret"},
+		{Announce: "udp://tracker.example.com:6969/announce"},
+		{Announce: "http://second.example.org/announce"},
+		{Announce: "udp://[2001:db8::1]:6969/announce"},
+		{Announce: "://invalid"},
+	}
+
+	want := []string{"2001:db8::1", "second.example.org", "tracker.example.com"}
+	if got := trackerHosts(trackers); !reflect.DeepEqual(got, want) {
+		t.Fatalf("trackerHosts() = %v, want %v", got, want)
 	}
 }

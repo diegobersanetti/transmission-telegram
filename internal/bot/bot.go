@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -23,10 +22,9 @@ type Bot struct {
 	Config *config.Config
 	Logger *slog.Logger
 
-	chatID       int64 // accessed atomically for thread safety
-	mdReplacer   *strings.Replacer
-	trackerRegex *regexp.Regexp
-	commands     map[string]commandFunc
+	chatID     int64 // accessed atomically for thread safety
+	mdReplacer *strings.Replacer
+	commands   map[string]commandFunc
 }
 
 // commandFunc is the handler signature for bot commands.
@@ -49,7 +47,6 @@ func New(cfg *config.Config, client *transmission.TransmissionClient, logger *sl
 			"_", "-",
 			"`", "'",
 		),
-		trackerRegex: regexp.MustCompile(`[https?|udp]://([^:/]*)`),
 	}
 	b.registerCommands()
 

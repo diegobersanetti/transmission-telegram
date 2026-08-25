@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -32,13 +33,9 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 			continue
 		}
 
-		// get the trackers using 'trackerRegex'
-		var trackers string
-		for _, tracker := range torrent.Trackers {
-			sm := b.trackerRegex.FindSubmatch([]byte(tracker.Announce))
-			if len(sm) > 1 {
-				trackers += string(sm[1]) + " "
-			}
+		trackers := strings.Join(trackerHosts(torrent.Trackers), " ")
+		if trackers == "" {
+			trackers = "-"
 		}
 
 		// format the info
