@@ -145,6 +145,25 @@ func TestReceiveTorrentDoesNotLeakToken(t *testing.T) {
 	}
 }
 
+func TestAddHonorsCanceledContext(t *testing.T) {
+	ft := newFakeTelegram(t)
+	fts := newFakeTransmission(t)
+	client, err := transmission.New(fts.URL+"/transmission/rpc", "", "")
+	if err != nil {
+		t.Fatalf("failed to create transmission client: %v", err)
+	}
+	b := newTestBot(t, ft.newBot(t), client)
+	ud := &models.Update{Message: &models.Message{Chat: models.Chat{ID: 42}}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b.add(ctx, ud, []string{"https://example.com/test.torrent"})
+
+	if got := fts.methodCount("torrent-add"); got != 0 {
+		t.Fatalf("canceled command issued %d torrent-add RPC calls", got)
+	}
+}
+
 // TestDownloadTelegramFile verifies the helper used by receiveTorrent.
 func TestDownloadTelegramFile(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {

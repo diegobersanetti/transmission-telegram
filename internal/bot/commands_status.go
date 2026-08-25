@@ -12,7 +12,7 @@ import (
 
 // downs will send the names of torrents with status 'Downloading' or in queue to
 func (b *Bot) downs(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*downs:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -36,7 +36,7 @@ func (b *Bot) downs(ctx context.Context, ud *models.Update, args []string) {
 
 // seeding will send the names of the torrents with the status 'Seeding' or in the queue to
 func (b *Bot) seeding(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*seeding:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -60,7 +60,7 @@ func (b *Bot) seeding(ctx context.Context, ud *models.Update, args []string) {
 
 // paused will send the names of the torrents with status 'Paused'
 func (b *Bot) paused(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*paused:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -86,7 +86,7 @@ func (b *Bot) paused(ctx context.Context, ud *models.Update, args []string) {
 
 // checking will send the names of torrents with the status 'verifying' or in the queue to
 func (b *Bot) checking(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*checking:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -112,7 +112,7 @@ func (b *Bot) checking(ctx context.Context, ud *models.Update, args []string) {
 
 // active will send torrents that are actively downloading or uploading
 func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*active:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -139,7 +139,7 @@ func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 
 	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		buf.Reset()
-		torrents, err = b.Client.GetTorrents()
+		torrents, err = b.Client.GetTorrents(ctx)
 		if err != nil {
 			return "" // if there was error getting torrents, skip to the next iteration
 		}
@@ -158,7 +158,7 @@ func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 	}, func() string {
 		// replace the speed with dashes to indicate that we are done being live
 		buf.Reset()
-		torrents, err = b.Client.GetTorrents()
+		torrents, err = b.Client.GetTorrents(ctx)
 		if err != nil {
 			return ""
 		}
@@ -178,7 +178,7 @@ func (b *Bot) active(ctx context.Context, ud *models.Update, args []string) {
 
 // errors will send torrents with errors
 func (b *Bot) errors(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*errors:* "+err.Error(), ud.Message.Chat.ID, false)
 		return

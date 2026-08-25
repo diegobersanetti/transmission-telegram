@@ -11,7 +11,6 @@ import (
 	"github.com/dustin/go-humanize"
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
-	"github.com/pyed/transmission"
 )
 
 // add takes an URL to a .torrent file to add it to transmission
@@ -23,21 +22,19 @@ func (b *Bot) add(ctx context.Context, ud *models.Update, args []string) {
 
 	// loop over the URL/s and add them
 	for _, url := range args {
-		cmd := transmission.NewAddCmdByURL(url)
-
-		torrent, err := b.Client.ExecuteAddCommand(cmd)
+		torrent, err := b.Client.AddTorrentByURL(ctx, url)
 		if err != nil {
 			b.Send(ctx, "*add:* "+err.Error(), ud.Message.Chat.ID, false)
 			continue
 		}
 
 		// check if torrent.Name is empty, then an error happened
-		if torrent.Name == "" {
+		if torrent == nil || torrent.Name == "" {
 			b.Send(ctx, "*add:* error adding "+url, ud.Message.Chat.ID, false)
 			continue
 		}
 
-		torrentInfo, err := b.Client.GetTorrent(torrent.ID)
+		torrentInfo, err := b.Client.GetTorrent(torrent.ID, ctx)
 		if err == nil && torrentInfo != nil && torrentInfo.SizeWhenDone > 0 {
 			b.Send(ctx, fmt.Sprintf("*Added:* `<%d>` *%s* (%s)",
 				torrent.ID, b.mdReplacer.Replace(torrent.Name), humanize.Bytes(torrentInfo.SizeWhenDone)), ud.Message.Chat.ID, true)
@@ -150,7 +147,7 @@ func (b *Bot) del(ctx context.Context, ud *models.Update, args []string) {
 			continue
 		}
 
-		name, err := b.Client.DeleteTorrent(num, false)
+		name, err := b.removeTorrent(ctx, num, false)
 		if err != nil {
 			b.Send(ctx, "*del:* "+err.Error(), ud.Message.Chat.ID, false)
 			continue
@@ -175,7 +172,7 @@ func (b *Bot) deldata(ctx context.Context, ud *models.Update, args []string) {
 			continue
 		}
 
-		name, err := b.Client.DeleteTorrent(num, true)
+		name, err := b.removeTorrent(ctx, num, true)
 		if err != nil {
 			b.Send(ctx, "*deldata:* "+err.Error(), ud.Message.Chat.ID, false)
 			continue
@@ -195,7 +192,7 @@ func (b *Bot) stop(ctx context.Context, ud *models.Update, args []string) {
 
 	// if the first argument is 'all' then stop all torrents
 	if args[0] == "all" {
-		if err := b.Client.StopAll(); err != nil {
+		if err := b.Client.StopAll(ctx); err != nil {
 			b.Send(ctx, "*stop:* error occurred while stopping some torrents", ud.Message.Chat.ID, false)
 			return
 		}
@@ -209,18 +206,16 @@ func (b *Bot) stop(ctx context.Context, ud *models.Update, args []string) {
 			b.Send(ctx, fmt.Sprintf("*stop:* %s is not a number", id), ud.Message.Chat.ID, false)
 			continue
 		}
-		status, err := b.Client.StopTorrent(num)
-		if err != nil {
-			b.Send(ctx, "*stop:* "+err.Error(), ud.Message.Chat.ID, false)
-			continue
-		}
-
-		torrent, err := b.Client.GetTorrent(num)
+		torrent, err := b.Client.GetTorrent(num, ctx)
 		if err != nil {
 			b.Send(ctx, fmt.Sprintf("[fail] *stop:* No torrent with an ID of %d", num), ud.Message.Chat.ID, false)
 			continue
 		}
-		b.Send(ctx, fmt.Sprintf("[%s] *stop:* %s", status, torrent.Name), ud.Message.Chat.ID, false)
+		if err := b.Client.StopTorrents(ctx, num); err != nil {
+			b.Send(ctx, "*stop:* "+err.Error(), ud.Message.Chat.ID, false)
+			continue
+		}
+		b.Send(ctx, fmt.Sprintf("[success] *stop:* %s", torrent.Name), ud.Message.Chat.ID, false)
 	}
 }
 
@@ -234,7 +229,7 @@ func (b *Bot) start(ctx context.Context, ud *models.Update, args []string) {
 
 	// if the first argument is 'all' then start all torrents
 	if args[0] == "all" {
-		if err := b.Client.StartAll(); err != nil {
+		if err := b.Client.StartAll(ctx); err != nil {
 			b.Send(ctx, "*start:* error occurred while starting some torrents", ud.Message.Chat.ID, false)
 			return
 		}
@@ -248,18 +243,16 @@ func (b *Bot) start(ctx context.Context, ud *models.Update, args []string) {
 			b.Send(ctx, fmt.Sprintf("*start:* %s is not a number", id), ud.Message.Chat.ID, false)
 			continue
 		}
-		status, err := b.Client.StartTorrent(num)
-		if err != nil {
-			b.Send(ctx, "*start:* "+err.Error(), ud.Message.Chat.ID, false)
-			continue
-		}
-
-		torrent, err := b.Client.GetTorrent(num)
+		torrent, err := b.Client.GetTorrent(num, ctx)
 		if err != nil {
 			b.Send(ctx, fmt.Sprintf("[fail] *start:* No torrent with an ID of %d", num), ud.Message.Chat.ID, false)
 			continue
 		}
-		b.Send(ctx, fmt.Sprintf("[%s] *start:* %s", status, torrent.Name), ud.Message.Chat.ID, false)
+		if err := b.Client.StartTorrents(ctx, num); err != nil {
+			b.Send(ctx, "*start:* "+err.Error(), ud.Message.Chat.ID, false)
+			continue
+		}
+		b.Send(ctx, fmt.Sprintf("[success] *start:* %s", torrent.Name), ud.Message.Chat.ID, false)
 	}
 }
 
@@ -273,7 +266,7 @@ func (b *Bot) check(ctx context.Context, ud *models.Update, args []string) {
 
 	// if the first argument is 'all' then verify all torrents
 	if args[0] == "all" {
-		if err := b.Client.VerifyAll(); err != nil {
+		if err := b.Client.VerifyAll(ctx); err != nil {
 			b.Send(ctx, "*check:* error occurred while verifying some torrents", ud.Message.Chat.ID, false)
 			return
 		}
@@ -287,17 +280,26 @@ func (b *Bot) check(ctx context.Context, ud *models.Update, args []string) {
 			b.Send(ctx, fmt.Sprintf("*check:* %s is not a number", id), ud.Message.Chat.ID, false)
 			continue
 		}
-		status, err := b.Client.VerifyTorrent(num)
-		if err != nil {
-			b.Send(ctx, "*check:* "+err.Error(), ud.Message.Chat.ID, false)
-			continue
-		}
-
-		torrent, err := b.Client.GetTorrent(num)
+		torrent, err := b.Client.GetTorrent(num, ctx)
 		if err != nil {
 			b.Send(ctx, fmt.Sprintf("[fail] *check:* No torrent with an ID of %d", num), ud.Message.Chat.ID, false)
 			continue
 		}
-		b.Send(ctx, fmt.Sprintf("[%s] *check:* %s", status, torrent.Name), ud.Message.Chat.ID, false)
+		if err := b.Client.VerifyTorrents(ctx, num); err != nil {
+			b.Send(ctx, "*check:* "+err.Error(), ud.Message.Chat.ID, false)
+			continue
+		}
+		b.Send(ctx, fmt.Sprintf("[success] *check:* %s", torrent.Name), ud.Message.Chat.ID, false)
 	}
+}
+
+func (b *Bot) removeTorrent(ctx context.Context, id int, deleteData bool) (string, error) {
+	torrent, err := b.Client.GetTorrent(id, ctx)
+	if err != nil {
+		return "", err
+	}
+	if err := b.Client.RemoveTorrents(ctx, deleteData, id); err != nil {
+		return "", err
+	}
+	return torrent.Name, nil
 }

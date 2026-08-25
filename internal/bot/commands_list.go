@@ -15,7 +15,7 @@ import (
 // list takes an optional argument which is a query to match against trackers
 // to list only torrents that has a tracker that matches.
 func (b *Bot) list(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*list:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -70,7 +70,7 @@ func (b *Bot) head(ctx context.Context, ud *models.Update, args []string) {
 		}
 	}
 
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*head:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -99,7 +99,7 @@ func (b *Bot) head(ctx context.Context, ud *models.Update, args []string) {
 
 	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		buf.Reset()
-		torrents, err = b.Client.GetTorrents()
+		torrents, err = b.Client.GetTorrents(ctx)
 		if err != nil {
 			return "" // try again next iteration
 		}
@@ -136,7 +136,7 @@ func (b *Bot) tail(ctx context.Context, ud *models.Update, args []string) {
 		}
 	}
 
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*tail:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -165,7 +165,7 @@ func (b *Bot) tail(ctx context.Context, ud *models.Update, args []string) {
 
 	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
 		buf.Reset()
-		torrents, err = b.Client.GetTorrents()
+		torrents, err = b.Client.GetTorrents(ctx)
 		if err != nil {
 			return ""
 		}
@@ -201,7 +201,7 @@ func (b *Bot) latest(ctx context.Context, ud *models.Update, args []string) {
 		}
 	}
 
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*latest:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -242,7 +242,7 @@ func (b *Bot) search(ctx context.Context, ud *models.Update, args []string) {
 		return
 	}
 
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*search:* "+err.Error(), ud.Message.Chat.ID, false)
 		return

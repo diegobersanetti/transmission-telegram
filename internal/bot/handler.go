@@ -38,10 +38,10 @@ func (b *Bot) registerCommands() {
 		"count": b.count, "co": b.count,
 		"del": b.del, "rm": b.del,
 		"deldata": b.deldata,
-		"turtle": b.turtle, "alt": b.turtle, "tu": b.turtle,
+		"turtle":  b.turtle, "alt": b.turtle, "tu": b.turtle,
 		"free": b.free, "space": b.free, "disk": b.free,
 		"reannounce": b.reannounce, "ra": b.reannounce,
-		"help": b.help,
+		"help":    b.help,
 		"version": b.version, "ver": b.version,
 	}
 }
@@ -51,5 +51,10 @@ func (b *Bot) help(ctx context.Context, ud *models.Update, args []string) {
 }
 
 func (b *Bot) version(ctx context.Context, ud *models.Update, args []string) {
-	b.Send(ctx, fmt.Sprintf("Transmission *%s*\nTransmission-telegram *%s*", b.Client.Version(), config.VERSION), ud.Message.Chat.ID, true)
+	session, err := b.Client.GetSession(ctx)
+	if err != nil {
+		b.Send(ctx, "*version:* "+err.Error(), ud.Message.Chat.ID, false)
+		return
+	}
+	b.Send(ctx, fmt.Sprintf("Transmission *%s*\nTransmission-telegram *%s*", session.Version, config.VERSION), ud.Message.Chat.ID, true)
 }

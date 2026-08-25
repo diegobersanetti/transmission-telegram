@@ -26,7 +26,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 		}
 
 		// get the torrent
-		torrent, err := b.Client.GetTorrent(torrentID)
+		torrent, err := b.Client.GetTorrent(torrentID, ctx)
 		if err != nil {
 			b.Send(ctx, fmt.Sprintf("*info:* Can't find a torrent with an ID of %d", torrentID), ud.Message.Chat.ID, false)
 			continue
@@ -59,7 +59,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 		// this go-routine will make the info live for 'duration * interval'
 		go func(torrentID, msgID int, trackers string) {
 			b.liveUpdateWithKeyboard(ctx, ud.Message.Chat.ID, msgID, func() string {
-				torrent, err := b.Client.GetTorrent(torrentID)
+				torrent, err := b.Client.GetTorrent(torrentID, ctx)
 				if err != nil {
 					return "" // skip this iteration if there's an error
 				}
@@ -73,7 +73,7 @@ func (b *Bot) info(ctx context.Context, ud *models.Update, args []string) {
 					torrent.ETA(), trackers)
 			}, func() string {
 				// fetch one final time for the dashes display
-				torrent, err := b.Client.GetTorrent(torrentID)
+				torrent, err := b.Client.GetTorrent(torrentID, ctx)
 				if err != nil {
 					return ""
 				}
@@ -118,7 +118,7 @@ func deleteConfirmationKeyboard(torrentID int, hash string) *models.InlineKeyboa
 
 // stats echo back transmission stats
 func (b *Bot) stats(ctx context.Context, ud *models.Update, args []string) {
-	stats, err := b.Client.GetStats()
+	stats, err := b.Client.GetStats(ctx)
 	if err != nil {
 		b.Send(ctx, "*stats:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -159,7 +159,7 @@ func (b *Bot) stats(ctx context.Context, ud *models.Update, args []string) {
 
 // speed will echo back the current download and upload speeds
 func (b *Bot) speed(ctx context.Context, ud *models.Update, args []string) {
-	stats, err := b.Client.GetStats()
+	stats, err := b.Client.GetStats(ctx)
 	if err != nil {
 		b.Send(ctx, "*speed:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -170,7 +170,7 @@ func (b *Bot) speed(ctx context.Context, ud *models.Update, args []string) {
 	msgID := b.Send(ctx, msg, ud.Message.Chat.ID, false)
 
 	b.liveUpdate(ctx, ud.Message.Chat.ID, msgID, func() string {
-		stats, err := b.Client.GetStats()
+		stats, err := b.Client.GetStats(ctx)
 		if err != nil {
 			return ""
 		}
@@ -183,7 +183,7 @@ func (b *Bot) speed(ctx context.Context, ud *models.Update, args []string) {
 
 // count returns current torrents count per status
 func (b *Bot) count(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*count:* "+err.Error(), ud.Message.Chat.ID, false)
 		return

@@ -112,7 +112,7 @@ func (b *Bot) sort(ctx context.Context, ud *models.Update, args []string) {
 
 // trackers will send a list of trackers and how many torrents each one has
 func (b *Bot) trackers(ctx context.Context, ud *models.Update, args []string) {
-	torrents, err := b.Client.GetTorrents()
+	torrents, err := b.Client.GetTorrents(ctx)
 	if err != nil {
 		b.Send(ctx, "*trackers:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
@@ -151,16 +151,8 @@ func (b *Bot) downloaddir(ctx context.Context, ud *models.Update, args []string)
 
 	downloadDir := args[0]
 
-	cmd := transmission.NewSessionSetCommand()
-	cmd.SetDownloadDir(downloadDir)
-
-	out, err := b.Client.ExecuteCommand(cmd)
-	if err != nil {
+	if err := b.Client.SetDownloadDir(ctx, downloadDir); err != nil {
 		b.Send(ctx, "*downloaddir:* "+err.Error(), ud.Message.Chat.ID, false)
-		return
-	}
-	if out.Result != "success" {
-		b.Send(ctx, "*downloaddir:* "+out.Result, ud.Message.Chat.ID, false)
 		return
 	}
 
@@ -194,19 +186,8 @@ func (b *Bot) speedLimit(ctx context.Context, ud *models.Update, args []string, 
 		return
 	}
 
-	speedLimitCmd := transmission.NewSpeedLimitCommand(limitType, uint(limit))
-	if speedLimitCmd == nil {
-		b.Send(ctx, fmt.Sprintf("*%s:* internal error", limitType), ud.Message.Chat.ID, false)
-		return
-	}
-
-	out, err := b.Client.ExecuteCommand(speedLimitCmd)
-	if err != nil {
+	if err := b.Client.SetSpeedLimit(ctx, limitType, uint(limit)); err != nil {
 		b.Send(ctx, fmt.Sprintf("*%s:* %v", limitType, err.Error()), ud.Message.Chat.ID, false)
-		return
-	}
-	if out.Result != "success" {
-		b.Send(ctx, fmt.Sprintf("*%s:* %v", limitType, out.Result), ud.Message.Chat.ID, false)
 		return
 	}
 
