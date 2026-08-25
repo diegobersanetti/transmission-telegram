@@ -56,5 +56,5 @@ func (b *Bot) version(ctx context.Context, ud *models.Update, args []string) {
 		b.Send(ctx, "*version:* "+err.Error(), ud.Message.Chat.ID, false)
 		return
 	}
-	b.Send(ctx, fmt.Sprintf("Transmission *%s*\nTransmission-telegram *%s*", session.Version, config.VERSION), ud.Message.Chat.ID, true)
+	b.Send(ctx, fmt.Sprintf("Transmission *%s*\nTransmission-telegram *%s*", session.Version, config.Version), ud.Message.Chat.ID, true)
 }

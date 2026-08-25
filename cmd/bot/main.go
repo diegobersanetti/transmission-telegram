@@ -37,7 +37,7 @@ func main() {
 	}))
 
 	logger.Info("Starting transmission-telegram",
-		"version", config.VERSION,
+		"version", config.Version,
 		"master_count", len(cfg.Masters),
 		"rpc_endpoint", safeEndpoint(cfg.RPCURL),
 	)

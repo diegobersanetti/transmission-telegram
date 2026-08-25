@@ -1,6 +1,6 @@
 module github.com/pyed/transmission-telegram
 
-go 1.26.6
+go 1.21
 
 require (
 	github.com/dustin/go-humanize v1.0.1

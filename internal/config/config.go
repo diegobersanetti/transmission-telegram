@@ -5,14 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	VERSION = "v2.0.0"
-
 	HELP = `
 	*list* or *li* or *ls*
 	Lists all the torrents, takes an optional argument which is a query to list only torrents that has a tracker matches the query, or some of it.
@@ -112,6 +111,19 @@ const (
 	- report any issues [here](https://github.com/pyed/transmission-telegram)
 	`
 )
+
+// Version is overridden by release builds. Tagged go install builds fall back
+// to the module version recorded in Go build information.
+var Version = "dev"
+
+func init() {
+	if Version != "dev" {
+		return
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		Version = info.Main.Version
+	}
+}
 
 type MasterSlice []string
 
