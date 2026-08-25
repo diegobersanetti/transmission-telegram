@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	tgbot "github.com/go-telegram/bot"
@@ -18,25 +19,30 @@ func (b *Bot) liveUpdateWithKeyboard(ctx context.Context, chatID int64, msgID in
 	if b.Config.NoLive {
 		return
 	}
+	if msgID <= 0 || b.Config.Duration <= 0 {
+		return
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	interval := b.Config.Interval
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	for i := 0; i < b.Config.Duration; i++ {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(b.Config.Interval):
+		case <-ticker.C:
 		}
 
 		if text := updateFn(); text != "" {
-			b.API.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      chatID,
-				MessageID:   msgID,
-				Text:        text,
-				ParseMode:   models.ParseModeMarkdownV1,
-				ReplyMarkup: markup,
-			})
+			if !b.editLiveMessage(ctx, chatID, msgID, text, markup) {
+				return
+			}
 		}
 	}
 
@@ -44,17 +50,28 @@ func (b *Bot) liveUpdateWithKeyboard(ctx context.Context, chatID int64, msgID in
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(b.Config.Interval):
+		case <-ticker.C:
 		}
 
 		if text := finalFn(); text != "" {
-			b.API.EditMessageText(ctx, &tgbot.EditMessageTextParams{
-				ChatID:      chatID,
-				MessageID:   msgID,
-				Text:        text,
-				ParseMode:   models.ParseModeMarkdownV1,
-				ReplyMarkup: markup,
-			})
+			b.editLiveMessage(ctx, chatID, msgID, text, markup)
 		}
 	}
+}
+
+func (b *Bot) editLiveMessage(ctx context.Context, chatID int64, msgID int, text string, markup models.ReplyMarkup) bool {
+	_, err := b.API.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+		ChatID:      chatID,
+		MessageID:   msgID,
+		Text:        text,
+		ParseMode:   models.ParseModeMarkdownV1,
+		ReplyMarkup: markup,
+	})
+	if err == nil || strings.Contains(strings.ToLower(err.Error()), "message is not modified") {
+		return true
+	}
+	if ctx.Err() == nil {
+		b.Logger.Warn("Stopping live update after edit failure", "error", err, "chat_id", chatID, "message_id", msgID)
+	}
+	return false
 }

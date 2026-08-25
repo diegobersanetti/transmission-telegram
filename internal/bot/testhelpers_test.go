@@ -24,6 +24,7 @@ type fakeTelegram struct {
 	texts           []string
 	callbackTexts   []string
 	markupEditCalls int
+	textEditCalls   int
 	fileBytes       []byte
 }
 
@@ -53,6 +54,11 @@ func newFakeTelegram(t *testing.T) *fakeTelegram {
 		case strings.HasSuffix(r.URL.Path, "/editMessageReplyMarkup"):
 			f.mu.Lock()
 			f.markupEditCalls++
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1,"date":1,"chat":{"id":42,"type":"private"}}}`))
+		case strings.HasSuffix(r.URL.Path, "/editMessageText"):
+			f.mu.Lock()
+			f.textEditCalls++
 			f.mu.Unlock()
 			_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1,"date":1,"chat":{"id":42,"type":"private"}}}`))
 		case strings.HasSuffix(r.URL.Path, "/getFile"):
@@ -93,6 +99,12 @@ func (f *fakeTelegram) markupEdits() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.markupEditCalls
+}
+
+func (f *fakeTelegram) textEdits() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.textEditCalls
 }
 
 // newTestBot builds a Bot wired to a fake Telegram server and (optionally)
