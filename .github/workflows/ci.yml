@@ -54,7 +54,20 @@ jobs:
       run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
 
     - name: Run unit tests
-      run: go test -v ./...
+      shell: bash
+      run: |
+        set +e
+        test_output="$(go test -v ./... 2>&1)"
+        test_status=$?
+        printf '%s\n' "${test_output}"
+        if [ "${test_status}" -ne 0 ]; then
+          diagnostic="$(printf '%s' "${test_output}" | tail -c 8000)"
+          diagnostic="${diagnostic//'%'/'%25'}"
+          diagnostic="${diagnostic//$'\r'/'%0D'}"
+          diagnostic="${diagnostic//$'\n'/'%0A'}"
+          echo "::error title=Unit tests failed::${diagnostic}"
+          exit "${test_status}"
+        fi
 
     - name: Run race detector
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26.7'
