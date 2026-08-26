@@ -57,6 +57,10 @@ go install github.com/pyed/transmission-telegram/cmd/bot@latest
 
 Explicit flags override the corresponding environment defaults. Prefer numeric Telegram user IDs for `-master`; unlike usernames, they cannot be renamed or reassigned.
 
+### Transmission Availability Alerts
+
+The RPC watcher reports an outage after three consecutive failed polls, avoiding alerts for brief connection interruptions. It sends only one warning per outage and one recovery message after the next successful poll.
+
 ### Example CLI Usage
 
 Load `TT_BOT_TOKEN` and, when needed, `TR_AUTH` from a protected environment file, service manager, or secret store before starting the bot. Avoid passing tokens and passwords as command-line flags on shared systems because process arguments and shell history may expose them.
