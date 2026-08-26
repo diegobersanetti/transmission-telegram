@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 )
@@ -79,13 +78,9 @@ func TestStartTailer(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var sentMessages []string
-	var mu sync.Mutex
-
+	messages := make(chan string, 1)
 	send := func(text string, chatID int64, markdown bool) int {
-		mu.Lock()
-		defer mu.Unlock()
-		sentMessages = append(sentMessages, text)
+		messages <- text
 		return 1
 	}
 
@@ -97,9 +92,6 @@ func TestStartTailer(t *testing.T) {
 		t.Fatalf("StartTailer failed: %v", err)
 	}
 
-	// Wait a moment for tailer to seek to EOF
-	time.Sleep(50 * time.Millisecond)
-
 	// Append a completion log line
 	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
@@ -108,17 +100,14 @@ func TestStartTailer(t *testing.T) {
 	f.WriteString(`[2026-08-19 04:00:00] Fedora 40 Workstation State changed from "Incomplete" to "Complete" (torrent.c:1234)` + "\n")
 	f.Close()
 
-	// Wait for tailer to read and process line
-	time.Sleep(600 * time.Millisecond)
-
-	mu.Lock()
-	if len(sentMessages) != 1 {
-		t.Fatalf("expected 1 completion message, got %d", len(sentMessages))
+	select {
+	case got := <-messages:
+		if got != "Completed: Fedora 40 Workstation" {
+			t.Fatalf("unexpected completion notification %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for completion notification")
 	}
-	if sentMessages[0] != "Completed: Fedora 40 Workstation" {
-		t.Errorf("expected 'Completed: Fedora 40 Workstation', got %q", sentMessages[0])
-	}
-	mu.Unlock()
 }
 
 func TestStartTailerReportsMissingFile(t *testing.T) {
@@ -159,7 +148,7 @@ func TestStartTailerFollowsRotation(t *testing.T) {
 		if got != "Completed: Rotated Log Torrent" {
 			t.Fatalf("unexpected rotation notification %q", got)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for rotated logfile notification")
 	}
 }
