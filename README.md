@@ -58,13 +58,13 @@ go install github.com/pyed/transmission-telegram/cmd/bot@latest
 Explicit flags override the corresponding environment defaults. Prefer numeric Telegram user IDs for `-master`; unlike usernames, they cannot be renamed or reassigned.
 
 ### Example CLI Usage
+
+Load `TT_BOT_TOKEN` and, when needed, `TR_AUTH` from a protected environment file, service manager, or secret store before starting the bot. Avoid passing tokens and passwords as command-line flags on shared systems because process arguments and shell history may expose them.
+
 ```bash
 transmission-telegram \
-  -token="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" \
   -master="123456789" \
-  -url="http://localhost:9091/transmission/rpc" \
-  -username="admin" \
-  -password="password"
+  -url="http://localhost:9091/transmission/rpc"
 ```
 
 ---
