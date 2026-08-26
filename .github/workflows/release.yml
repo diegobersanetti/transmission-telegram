@@ -6,12 +6,49 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  verify:
+    name: Verify Release Candidate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.7'
+
+      - name: Verify dependencies and generated module files
+        shell: bash
+        run: |
+          go mod verify
+          unformatted="$(git ls-files -z '*.go' | xargs -0 gofmt -l)"
+          test -z "${unformatted}"
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Run static analysis
+        run: |
+          go vet ./...
+          go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+
+      - name: Run tests with the race detector
+        run: go test -race ./...
+
+      - name: Scan reachable dependencies for vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
   release:
     name: Build and Publish Release
     runs-on: ubuntu-latest
+    needs: verify
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
