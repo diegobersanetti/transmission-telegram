@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [ master, main, dev ]
   pull_request:
     branches: [ master, main, dev ]
 
@@ -119,3 +118,25 @@ jobs:
           OUTPUT="${OUTPUT}.exe"
         fi
         go build -trimpath -v -o "${OUTPUT}" ./cmd/bot/
+
+  container:
+    name: Container Build
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 10
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Build and inspect container
+      shell: bash
+      env:
+        DOCKER_BUILDKIT: 1
+      run: |
+        docker build --build-arg VERSION=ci --tag transmission-telegram:ci .
+        test "$(docker image inspect --format '{{.Config.User}}' transmission-telegram:ci)" = "1000:1000"
+        test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' transmission-telegram:ci)" = "ci"
+        startup_output="$(docker run --rm transmission-telegram:ci 2>&1 || true)"
+        grep -F "telegram bot token is required" <<< "${startup_output}"
