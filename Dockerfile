@@ -1,6 +1,6 @@
 ARG VERSION=dev
 
-FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine AS build
 
 ARG TARGETOS TARGETARCH TARGETVARIANT
 ARG VERSION
@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v}
     go build -trimpath -ldflags="-s -w -X github.com/pyed/transmission-telegram/internal/config.Version=${VERSION}" \
     -o /transmission-telegram ./cmd/bot/
 
-FROM alpine:3.23
+FROM alpine:3.24
 ARG VERSION
 LABEL org.opencontainers.image.source="https://github.com/pyed/transmission-telegram" \
       org.opencontainers.image.licenses="Apache-2.0" \
