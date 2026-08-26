@@ -21,6 +21,11 @@ jobs:
       matrix:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
         go-version: [ '1.21.13', '1.26.7' ]
+        exclude:
+          # Go 1.21's internal linker omits LC_UUID, which current macOS
+          # runners require before they will execute test binaries.
+          - os: macos-latest
+            go-version: '1.21.13'
 
     steps:
     - name: Checkout repository
