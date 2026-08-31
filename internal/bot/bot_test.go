@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -159,6 +161,30 @@ func TestDefaultBotCommands(t *testing.T) {
 		if !menu[command] {
 			t.Errorf("primary command %q is missing from the Telegram menu", command)
 		}
+	}
+}
+
+func TestClearWebhookSkipsDeleteWhenUnset(t *testing.T) {
+	var deleteCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/getWebhookInfo") {
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"url":"","has_custom_certificate":false,"pending_update_count":0}}`))
+			return
+		}
+		deleteCalls.Add(1)
+	}))
+	defer server.Close()
+
+	api, err := tgbot.New(testBotToken, tgbot.WithServerURL(server.URL), tgbot.WithSkipGetMe())
+	if err != nil {
+		t.Fatalf("create test bot: %v", err)
+	}
+	if err := clearWebhook(context.Background(), api); err != nil {
+		t.Fatalf("clear absent webhook: %v", err)
+	}
+	if got := deleteCalls.Load(); got != 0 {
+		t.Fatalf("deleteWebhook called %d times for an absent webhook", got)
 	}
 }
 

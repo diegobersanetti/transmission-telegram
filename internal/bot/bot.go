@@ -67,11 +67,8 @@ func New(ctx context.Context, cfg *config.Config, client *transmission.Transmiss
 	}
 	b.API = api
 
-	// Remove any stale webhook so long polling receives updates reliably
-	if _, err := api.DeleteWebhook(ctx, &tgbot.DeleteWebhookParams{
-		DropPendingUpdates: false,
-	}); err != nil {
-		return nil, fmt.Errorf("delete stale Telegram webhook: %w", err)
+	if err := clearWebhook(ctx, api); err != nil {
+		return nil, err
 	}
 
 	me, err := api.GetMe(ctx)
@@ -89,6 +86,21 @@ func New(ctx context.Context, cfg *config.Config, client *transmission.Transmiss
 	}
 
 	return b, nil
+}
+
+func clearWebhook(ctx context.Context, api *tgbot.Bot) error {
+	info, err := api.GetWebhookInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("get Telegram webhook info: %w", err)
+	}
+	if info.URL == "" {
+		return nil
+	}
+
+	if _, err := api.DeleteWebhook(ctx, &tgbot.DeleteWebhookParams{DropPendingUpdates: false}); err != nil {
+		return fmt.Errorf("delete stale Telegram webhook: %w", err)
+	}
+	return nil
 }
 
 // defaultBotCommands returns the list of primary commands to display in Telegram's menu.
